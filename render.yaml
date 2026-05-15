@@ -1,0 +1,25 @@
+services:
+  - type: web
+    name: yaocihuatl-backend
+    env: docker
+    rootDir: backend
+    plan: starter
+    autoDeploy: true
+    healthCheckPath: /health
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: PORT
+        value: "8000"
+  - type: web
+    name: yaocihuatl-frontend
+    env: docker
+    rootDir: frontend/apps/dashboard
+    plan: starter
+    autoDeploy: true
+    healthCheckPath: /
+    envVars:
+      - key: PORT
+        value: "3000"
+      - key: NEXT_PUBLIC_API_URL
+        sync: false
