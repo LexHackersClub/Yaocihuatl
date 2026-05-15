@@ -64,6 +64,22 @@ services:
   # Future services — uncomment when modules are implemented
   # ──────────────────────────────────────────────
 
+  # minio:
+  #   image: minio/minio:latest
+  #   container_name: yaocihuatl-minio
+  #   restart: unless-stopped
+  #   command: server /data --console-address ":9001"
+  #   environment:
+  #     MINIO_ROOT_USER: ${MINIO_ROOT_USER:-admin}
+  #     MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-change-me-in-production}
+  #   ports:
+  #     - "9000:9000"
+  #     - "9001:9001"
+  #   volumes:
+  #     - minio-data:/data
+  #   networks:
+  #     - yaocihuatl-net
+
   # backend:
   #   build:
   #     context: ./backend
@@ -114,3 +130,4 @@ networks:
 volumes:
   postgres-data:
   redis-data:
+  # minio-data:
