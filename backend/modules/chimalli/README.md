@@ -35,7 +35,7 @@ CHIMALLI_RAG_DOCUMENTS_PATH=../rag_documents
 CHIMALLI_RAG_INDEX_PATH=.local/chimalli_rag_index.jsonl
 ```
 
-Si `DEEPSEEK_API_KEY` está vacío, Chimalli usa modo demo controlado.
+Si no hay una llave configurada para el proveedor seleccionado, Chimalli usa modo demo controlado.
 
 ### Usar DeepSeek mediante OpenRouter
 
@@ -46,7 +46,7 @@ LLM_PROVIDER=openrouter
 LLM_MODEL=deepseek/deepseek-chat
 LLM_BASE_URL=https://openrouter.ai/api/v1
 OPENROUTER_API_KEY=sk-or-v1-...
-OPENROUTER_HTTP_REFERER=http://localhost:3001
+OPENROUTER_HTTP_REFERER=http://localhost:3000
 OPENROUTER_APP_TITLE=Yaocihuatl Chimalli
 ```
 
