@@ -1,0 +1,13 @@
+# Yaocihuatl docker-compose placeholder.
+#
+# No production services are defined yet. Future services may include:
+# - frontend: Next.js apps.
+# - backend: FastAPI API.
+# - postgres: relational database with pgvector.
+# - redis: broker/cache for workers.
+# - worker: Celery workers for async jobs.
+#
+# Keep this file minimal until service boundaries and environment
+# requirements are documented.
+
+services: {}
