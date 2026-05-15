@@ -340,7 +340,7 @@ export const chimalliMessages = [
     id: "msg-1",
     author: "assistant" as const,
     content:
-      "Hola. Soy Chimalli en modo demo. Puedo ayudarte a organizar informacion y preparar un kit revisable; no sustituyo asesoria legal ni decido si existe una infraccion."
+      "Hola. Soy Chimalli. Puedo ayudarte a organizar informacion y preparar un kit revisable; no sustituyo asesoria legal ni decido si existe una infraccion."
   },
   {
     id: "msg-2",
@@ -362,27 +362,27 @@ export const chimalliMessages = [
 ];
 
 export const extractedInfo = [
-  { label: "Persona protegida", value: "Persona protegida 01", state: "Editable" },
-  { label: "Contexto politico", value: "Candidatura local demo", state: "Sugerido" },
-  { label: "Plataforma", value: "Plataforma demo A", state: "Pendiente" },
-  { label: "Municipio", value: "Municipio demo", state: "Sugerido" }
+  { label: "Persona protegida", value: "Sin dato", state: "Editable" },
+  { label: "Contexto politico", value: "Sin dato", state: "Pendiente" },
+  { label: "Plataforma", value: "Sin dato", state: "Pendiente" },
+  { label: "Municipio", value: "Sin dato", state: "Pendiente" }
 ];
 
 export const vpmrgTest = [
   {
     element: "Contexto politico-electoral",
-    result: "Podria corresponder",
-    note: "Con base en la narrativa demo, requiere revision."
+    result: "Pendiente",
+    note: "Aun no hay narrativa suficiente para orientar este elemento."
   },
   {
     element: "Conducta basada en genero",
-    result: "Sugerencia IA",
-    note: "Lenguaje potencialmente relacionado, no concluyente."
+    result: "Pendiente",
+    note: "Aun no se han descrito expresiones o conductas para revisar."
   },
   {
     element: "Impacto en derechos politicos",
     result: "Pendiente de revisar",
-    note: "Falta documentar alcance e impacto."
+    note: "Falta documentar si existe posible afectacion a derechos politico-electorales."
   }
 ];
 

@@ -29,6 +29,21 @@ router = APIRouter(prefix="/chimalli", tags=["chimalli"])
 rag_service = RagService()
 case_service = ChimalliCaseService(rag_service=rag_service)
 llm_service = LlmService()
+NON_AUTOMATED_NOTICE = "Chimalli no presenta denuncias automáticamente."
+
+
+def _append_required_notices(content: str) -> str:
+    reply = content.strip()
+    reply_lower = reply.lower()
+    notices = [reply]
+    if (
+        "denuncias automáticamente" not in reply_lower
+        and "denuncias automaticamente" not in reply_lower
+    ):
+        notices.append(NON_AUTOMATED_NOTICE)
+    if HUMAN_REVIEW_NOTICE not in reply:
+        notices.append(HUMAN_REVIEW_NOTICE)
+    return "\n\n".join(notice for notice in notices if notice)
 
 
 @router.post("/chat", response_model=ChatResponse)
@@ -62,11 +77,11 @@ def chat(request: ChatRequest) -> ChatResponse:
     reply = (
         "He organizado tu narrativa en un borrador preliminar. "
         "El test asistivo identifica posible VPMRG y sugiere revisar la ruta IEEBC / UTCE. "
-        "Chimalli no presenta denuncias automáticamente. "
-        + HUMAN_REVIEW_NOTICE
+        f"{NON_AUTOMATED_NOTICE} "
+        f"{HUMAN_REVIEW_NOTICE}"
     )
     if not llm_result.demo_mode and llm_result.content and "[" not in llm_result.content:
-        reply = llm_result.content + "\n\n" + HUMAN_REVIEW_NOTICE
+        reply = _append_required_notices(llm_result.content)
     return ChatResponse(
         case=case,
         reply=reply,

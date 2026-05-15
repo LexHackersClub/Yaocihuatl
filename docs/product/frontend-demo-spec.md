@@ -4,20 +4,21 @@ This document defines the scope and boundaries for the initial Yaocihuatl fronte
 
 ## Purpose
 
-Build a navigable, mock-only product experience for hackathon demonstration. The demo shows how Yaocihuatl could support institutional monitoring, local evidence sealing, guided orientation, review, and public aggregate transparency.
+Build a navigable product experience for hackathon demonstration. The demo shows how Yaocihuatl supports institutional monitoring, local evidence sealing, guided orientation, review, and public aggregate transparency using a real deployable stack with synthetic data.
 
 ## Scope
 
 - A Next.js App Router demo application under `frontend/apps/demo`.
-- Mock data only, centralized in frontend code.
+- Real backend/API connectivity where a module is implemented.
+- Seeded synthetic data in PostgreSQL for roles, cases, alerts, evidence metadata, audit logs and public metrics.
 - Visual flows for Tlachia, Machiyotl, Chimalli, institutional review, public verification, privacy settings, and safe exit.
 - Reusable UI components aligned to `DESIGN.md`.
-- Static and client-side simulated interactions only.
+- Static/client-side simulated interactions for modules whose real APIs are not implemented yet.
 
 ## Explicit Non-Goals
 
-- No backend integration.
-- No authentication or authorization.
+- No real personal data or real evidence.
+- No production authentication policy.
 - No real AI, RAG, entity extraction, classification, scraping, or surveillance.
 - No legal determination, jurisdictional decision, or official routing.
 - No real file upload, hash generation, PDF generation, or evidence submission.
@@ -32,17 +33,21 @@ Build a navigable, mock-only product experience for hackathon demonstration. The
 
 ## Inputs
 
-- Synthetic role selections.
+- Demo role login using public seeded credentials.
 - Synthetic evidence metadata.
 - Synthetic alerts and cases.
-- Mock chat replies.
+- Backend chat replies when Chimalli is available; controlled local replies for non-case UI interactions.
 - Mock public aggregate metrics.
 
 ## Outputs
 
 - Visual navigation states.
-- Mock evidence cards, hash blocks, timelines, charts, and review panels.
+- Evidence cards, hash blocks, timelines, charts, and review panels backed by synthetic data as APIs are connected.
 - Simulated export, send, copy, and verification states.
+
+## Demo Meaning
+
+“Demo” means a real app deployed with synthetic data, public credentials and safe non-final actions. It does not mean every screen is mock-only. The label must remain visible because no screen should be confused with a production complaint, legal decision, or evidence submission system.
 
 ## Risks and Mitigations
 

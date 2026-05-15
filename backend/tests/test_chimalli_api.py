@@ -1,6 +1,8 @@
 from fastapi.testclient import TestClient
 
+from app.api.v1 import chimalli
 from app.main import app
+from app.schemas.chimalli import LlmResult
 
 
 DEMO_NARRATIVE = (
@@ -10,7 +12,21 @@ DEMO_NARRATIVE = (
 )
 
 
-def test_chimalli_chat_endpoint_returns_structured_case() -> None:
+def _mock_llm_response() -> LlmResult:
+    return LlmResult(
+        content="Respuesta demo controlada para orientar sin decidir.",
+        provider="test",
+        model="test-model",
+        demo_mode=False,
+    )
+
+
+def test_chimalli_chat_endpoint_returns_structured_case(monkeypatch) -> None:
+    monkeypatch.setattr(
+        chimalli.llm_service,
+        "complete",
+        lambda messages, max_tokens=700: _mock_llm_response(),
+    )
     client = TestClient(app)
 
     response = client.post(
@@ -35,7 +51,12 @@ def test_chimalli_chat_endpoint_returns_structured_case() -> None:
     assert "denuncias automáticamente" in payload["reply"]
 
 
-def test_chimalli_expediente_endpoint_returns_html_draft() -> None:
+def test_chimalli_expediente_endpoint_returns_html_draft(monkeypatch) -> None:
+    monkeypatch.setattr(
+        chimalli.llm_service,
+        "complete",
+        lambda messages, max_tokens=700: _mock_llm_response(),
+    )
     client = TestClient(app)
     chat_response = client.post("/api/v1/chimalli/chat", json={"message": DEMO_NARRATIVE})
     case_id = chat_response.json()["case"]["case_id"]

@@ -870,7 +870,7 @@ export function ChatMessage({ author, content }: ChatMessageProps) {
         {isAssistant ? (
           <div className="mb-2 flex items-center gap-2 text-xs font-semibold text-neutral-600">
             <Bot aria-hidden="true" className="h-4 w-4" />
-            Chimalli · modo demo
+            Chimalli
           </div>
         ) : null}
         {content}
@@ -881,6 +881,7 @@ export function ChatMessage({ author, content }: ChatMessageProps) {
 
 interface QuickReplyChipsProps {
   replies?: string[];
+  onPick?: (reply: string) => void;
 }
 
 export function QuickReplyChips({
@@ -890,12 +891,19 @@ export function QuickReplyChips({
     "Necesito guardar y continuar despues",
     "Quiero revisar antes de enviar",
     "Explicalo en palabras simples"
-  ]
+  ],
+  onPick
 }: QuickReplyChipsProps) {
   return (
     <div className="flex flex-wrap gap-2">
       {replies.map((reply) => (
-        <Button key={reply} size="sm" type="button" variant="secondary">
+        <Button
+          key={reply}
+          onClick={() => onPick?.(reply)}
+          size="sm"
+          type="button"
+          variant="secondary"
+        >
           {reply}
         </Button>
       ))}
@@ -904,27 +912,199 @@ export function QuickReplyChips({
 }
 
 export function ChimalliChat() {
-  const messages = [
+  const [messages, setMessages] = useState<
+    Array<{ author: "assistant" | "user"; content: string }>
+  >([
     {
       author: "assistant" as const,
       content:
-        "Hola. Soy Chimalli en modo demo. Puedo ayudarte a ordenar informacion, pero no sustituyo asesoria legal."
+        "Hola. Soy Chimalli. Puedo ayudarte a ordenar una narrativa, identificar elementos preliminares y preparar informacion para revision humana. No sustituyo asesoria legal ni decido si existe una infraccion."
     },
     {
       author: "assistant" as const,
       content:
-        "Te hare una pregunta a la vez. Puedes responder No se o Prefiero no responder."
-    },
-    {
-      author: "user" as const,
-      content: "Esta relacionado con una candidatura local en Municipio demo."
-    },
-    {
-      author: "assistant" as const,
-      content:
-        "Gracias. Podria corresponder a una ruta electoral, pero requiere revision de una autoridad competente."
+        "Si quieres empezar, cuentame que ocurrio, en que plataforma paso y si esta relacionado con un cargo, candidatura o actividad politica."
     }
-  ];
+  ]);
+  const [input, setInput] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [dynamicExtractedInfo, setDynamicExtractedInfo] = useState(extractedInfo);
+  const [dynamicVpmrgTest, setDynamicVpmrgTest] = useState(vpmrgTest);
+  const [hasCaseContext, setHasCaseContext] = useState(false);
+
+  function answerLocally(message: string): string | null {
+    const normalized = message
+      .trim()
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "");
+    const compact = normalized.replace(/[¿?¡!.,;:]/g, "").trim();
+
+    if (["hola", "hola?", "buenos dias", "buenas tardes", "buenas noches"].includes(compact)) {
+      return "Hola. Estoy contigo. Puedo ayudarte a ordenar lo ocurrido paso a paso; si aun no quieres contar detalles, tambien puedes decirme que necesitas entender primero.";
+    }
+
+    if (
+      compact.includes("quien eres") ||
+      compact.includes("que eres") ||
+      compact.includes("como funcionas")
+    ) {
+      return "Soy Chimalli, un asistente de orientacion dentro de Yaocihuatl. Ayudo a estructurar informacion, revisar evidencia adjunta y preparar un borrador para revision humana. No soy autoridad, no presento denuncias automaticamente y no determino culpabilidad.";
+    }
+
+    if (compact === "agregar evidencia") {
+      return "Puedes agregar evidencia desde Machiyotl o desde la bandeja lateral. La evidencia debe permanecer revisable: primero se sella localmente, luego decides si se incluye en el kit.";
+    }
+
+    if (compact === "no se que autoridad corresponde") {
+      return "No pasa nada si no sabes que autoridad corresponde. Chimalli puede sugerir una ruta preliminar cuando compartas contexto suficiente, y esa sugerencia debe validarla una persona autorizada.";
+    }
+
+    if (compact === "necesito guardar y continuar despues") {
+      return "Puedes guardar y continuar despues. La idea es que no tengas que completar todo en una sola sesion ni enviar informacion sin revisarla.";
+    }
+
+    if (compact === "quiero revisar antes de enviar") {
+      return "Ese es el paso correcto. Antes de enviar, revisa narrativa, evidencia incluida, metadatos, autoridad sugerida y que informacion se mantiene local.";
+    }
+
+    if (compact === "explicalo en palabras simples" && !hasCaseContext) {
+      return "En simple: tu cuentas que paso, Machiyotl ayuda a preservar evidencia, y Chimalli organiza la informacion para que una autoridad humana pueda revisarla. Nada se decide automaticamente.";
+    }
+
+    return null;
+  }
+
+  async function sendMessage(message: string) {
+    if (!message.trim() || isLoading) {
+      return;
+    }
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+    const outgoing = message.trim();
+    setError(null);
+    setInput("");
+    setMessages((current) => [...current, { author: "user", content: outgoing }]);
+
+    const localReply = answerLocally(outgoing);
+    if (localReply) {
+      setMessages((current) => [...current, { author: "assistant", content: localReply }]);
+      return;
+    }
+
+    setIsLoading(true);
+
+    try {
+      const response = await fetch(`${apiUrl}/api/v1/chimalli/chat`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message: outgoing,
+          integration: {
+            tlachia_alert_id: "demo-alert-001",
+            source_platform: "Plataforma demo A",
+            risk_level: "high",
+            machiyotl_evidence_hashes: [evidences[0]?.hash ?? "sha256:demo"],
+            evidence_status: "sealed_local"
+          }
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error("No se pudo solicitar orientacion. Tu informacion sigue en esta pantalla.");
+      }
+
+      const payload = (await response.json()) as {
+        reply: string;
+        case: {
+          victim: {
+            role: string | null;
+            position: string | null;
+            state: string | null;
+            municipality: string | null;
+          };
+          facts: { platform: string | null };
+          vpmrg_test: {
+            political_electoral_link: { reason: string };
+            gender_element: { reason: string };
+            political_rights_impact: { reason: string };
+            overall_result: string;
+          };
+        };
+      };
+
+      setMessages((current) => [
+        ...current,
+        {
+          author: "assistant",
+          content:
+            payload.reply ||
+            "Chimalli devolvio una respuesta sin contenido. Requiere revision humana."
+        }
+      ]);
+      setHasCaseContext(true);
+
+      setDynamicExtractedInfo([
+        {
+          label: "Contexto politico",
+          value: payload.case.victim.role ?? "Sin dato",
+          state: "Sugerido"
+        },
+        {
+          label: "Cargo o posicion",
+          value: payload.case.victim.position ?? "Sin dato",
+          state: "Editable"
+        },
+        {
+          label: "Plataforma",
+          value: payload.case.facts.platform ?? "Sin dato",
+          state: "Sugerido"
+        },
+        {
+          label: "Municipio",
+          value:
+            payload.case.victim.municipality ??
+            payload.case.victim.state ??
+            "Sin dato",
+          state: "Pendiente"
+        }
+      ]);
+
+      setDynamicVpmrgTest([
+        {
+          element: "Contexto politico-electoral",
+          result: "Podria corresponder",
+          note: payload.case.vpmrg_test.political_electoral_link.reason
+        },
+        {
+          element: "Conducta basada en genero",
+          result: "Sugerencia IA",
+          note: payload.case.vpmrg_test.gender_element.reason
+        },
+        {
+          element: "Impacto en derechos politicos",
+          result: payload.case.vpmrg_test.overall_result,
+          note: payload.case.vpmrg_test.political_rights_impact.reason
+        }
+      ]);
+    } catch (caught) {
+      setError(
+        caught instanceof Error
+          ? caught.message
+          : "No se pudo conectar con Chimalli en este momento."
+      );
+      setMessages((current) => [
+        ...current,
+        {
+          author: "assistant",
+          content:
+            "No fue posible conectar con el backend de Chimalli. Tu informacion sigue en esta pantalla; puedes guardar y reintentar antes de enviar cualquier cosa."
+        }
+      ]);
+    } finally {
+      setIsLoading(false);
+    }
+  }
 
   return (
     <div className="grid gap-6 xl:grid-cols-[1fr_360px]">
@@ -934,7 +1114,7 @@ export function ChimalliChat() {
             <div>
               <CardTitle>Chimalli</CardTitle>
               <CardDescription>
-                Orientacion procedimental con IA simulada y revision antes de enviar.
+                Orientacion procedimental con asistencia de IA y revision humana antes de enviar.
               </CardDescription>
             </div>
             <AIAssistBadge />
@@ -951,7 +1131,11 @@ export function ChimalliChat() {
             ))}
           </div>
           <div className="mt-6 space-y-4 border-t border-border pt-4">
-            <QuickReplyChips />
+            <QuickReplyChips
+              onPick={(reply) => {
+                void sendMessage(reply);
+              }}
+            />
             <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
               <Field
                 helper="No incluyas datos sensibles innecesarios en esta demo."
@@ -961,13 +1145,27 @@ export function ChimalliChat() {
                 <Input
                   aria-describedby="chat-composer-helper"
                   id="chat-composer"
+                  onChange={(event) => setInput(event.target.value)}
                   placeholder="Escribe una respuesta o usa una opcion rapida"
+                  value={input}
                 />
               </Field>
-              <Button className="self-end" type="button">
-                Enviar respuesta
+              <Button
+                className="self-end"
+                disabled={isLoading || input.trim().length === 0}
+                onClick={() => {
+                  void sendMessage(input);
+                }}
+                type="button"
+              >
+                {isLoading ? "Enviando..." : "Enviar respuesta"}
               </Button>
             </div>
+            {error ? (
+              <p className="rounded-md border border-warning-100 bg-warning-100 p-3 text-sm text-warning-700">
+                {error}
+              </p>
+            ) : null}
           </div>
         </CardContent>
       </Card>
@@ -978,7 +1176,7 @@ export function ChimalliChat() {
             <CardDescription>Editable antes de cualquier envio.</CardDescription>
           </CardHeader>
           <CardContent>
-            {extractedInfo.map((item) => (
+            {dynamicExtractedInfo.map((item) => (
               <div className="border-b border-border py-3 last:border-0" key={item.label}>
                 <p className="text-xs font-semibold text-neutral-600">{item.label}</p>
                 <p className="mt-1 text-sm font-bold text-foreground">{item.value}</p>
@@ -996,7 +1194,7 @@ export function ChimalliChat() {
             <CardDescription>No confirma hechos ni sustituye revision legal.</CardDescription>
           </CardHeader>
           <CardContent>
-            {vpmrgTest.map((item) => (
+            {dynamicVpmrgTest.map((item) => (
               <div className="border-b border-border py-3 last:border-0" key={item.element}>
                 <p className="text-sm font-bold text-foreground">{item.element}</p>
                 <p className="mt-1 text-sm text-neutral-700">{item.note}</p>
