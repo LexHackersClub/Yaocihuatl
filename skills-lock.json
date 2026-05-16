@@ -19,6 +19,12 @@
       "skillPath": "plugins/api-scaffolding/skills/fastapi-templates/SKILL.md",
       "computedHash": "8fdfb9bad6aef892b4f16ef3b07ef5eea3b0497d37eeaeddb07244d657cc8711"
     },
+    "pwa-development": {
+      "source": "alinaqi/claude-bootstrap",
+      "sourceType": "github",
+      "skillPath": "skills/pwa-development/SKILL.md",
+      "computedHash": "356d9a26a8435778bb3bb906f5198814c48872ae87485ae97f4da3c10a0cfcc5"
+    },
     "skill-creator": {
       "source": "anthropics/skills",
       "sourceType": "github",
