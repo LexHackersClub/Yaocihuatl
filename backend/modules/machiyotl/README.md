@@ -1,6 +1,6 @@
 # Machiyotl
 
-**Sellado forense ·_hashes SHA-256 · preservación de evidencia · generación de PDFs · verificación pública**
+**Sellado forense · hashes SHA-256 · preservación de evidencia · generación de PDFs · verificación pública**
 
 _Machiyotl_ (nah. "sello / marca"): módulo de captura forense de evidencia digital con identidad criptográfica generada localmente, almacenamiento cifrado offline-first, cadena de custodia auditable y generación de reportes PDF verificables.
 
