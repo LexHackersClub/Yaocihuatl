@@ -12,6 +12,26 @@ import { tlachiaAlerts } from "@/lib/mock-data";
 import { AlertTriangle, Bell, ExternalLink } from "lucide-react";
 import Link from "next/link";
 
+function getRealisticUrl(alert: typeof tlachiaAlerts[0]): string {
+  const platform = alert.platform.toLowerCase();
+  if (platform.includes("x") || platform.includes("twitter")) {
+    return `https://x.com/candidata_demo/status/${alert.id.replace("tla-", "")}`;
+  }
+  if (platform.includes("facebook") || platform.includes("fb")) {
+    return `https://facebook.com/groups/demo-bc/posts/${alert.id.replace("tla-", "")}`;
+  }
+  if (platform.includes("instagram") || platform.includes("ig")) {
+    return `https://instagram.com/p/${alert.id.replace("tla-", "")}`;
+  }
+  if (platform.includes("tiktok")) {
+    return `https://tiktok.com/@candidata_demo/video/${alert.id.replace("tla-", "")}`;
+  }
+  if (platform.includes("whatsapp") || platform.includes("wa")) {
+    return `https://wa.me/message/${alert.id.replace("tla-", "")}`;
+  }
+  return `https://${platform.replace(/\s+/g, "").toLowerCase()}.com/post/${alert.id.replace("tla-", "")}`;
+}
+
 export default function MachiyotlAlertsPage() {
   const pendingAlerts = tlachiaAlerts.filter(
     (a) => a.status === "Pendiente de revision humana" || a.status === "En revision"
@@ -77,7 +97,7 @@ export default function MachiyotlAlertsPage() {
                       </div>
                       <Button asChild size="sm">
                         <Link
-                          href={`/app/machiyotl/capture?sourceUrl=https://demo.example/${alert.id}&platform=${encodeURIComponent(alert.platform)}&alertId=${alert.id}`}
+                          href={`/app/machiyotl/capture?sourceUrl=${encodeURIComponent(getRealisticUrl(alert))}&platform=${encodeURIComponent(alert.platform)}&alertId=${alert.id}`}
                         >
                           <ExternalLink className="mr-2 h-4 w-4" />
                           Pre-llenar evidencia
