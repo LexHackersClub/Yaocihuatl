@@ -219,24 +219,29 @@ Verifica públicamente si un hash SHA-256 de evidencia existe en el sistema. End
 
 ## Tlachia
 
-Estado: pendiente de API real.
+Estado: MVP en desarrollo.
 
-Contratos previstos:
+Contratos previstos para esta fase:
 
-- listar alertas;
+- listar fuentes Reddit configuradas;
+- crear/actualizar/pausar fuente Reddit;
+- ejecutar ingesta controlada desde Reddit;
+- listar corridas de ingesta;
+- listar alertas asistivas;
 - consultar alerta por ID;
-- registrar revision humana;
+- registrar revision humana (revisar, descartar, escalar);
 - listar senales explicables;
-- listar menciones sanitizadas;
-- crear caso core desde alerta revisada.
+- listar menciones sanitizadas.
 
-Restricciones:
+Restricciones MVP:
 
 - no scraping invasivo;
 - no comunicaciones privadas;
 - no clasificacion como decision final;
 - no almacenar contenido real sin base legal, minimizacion y autorizacion;
-- toda mencion debe estar sanitizada o autorizada.
+- toda mencion debe estar sanitizada o autorizada;
+- `risk_level` usa `low`, `medium`, `high`, `unclassified`;
+- nunca `confirmed` para resultados automaticos.
 
 ## Core / Observatory / Audit
 

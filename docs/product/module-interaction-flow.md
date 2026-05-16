@@ -31,7 +31,7 @@ El sistema utiliza un único backend centralizado (FastAPI + PostgreSQL + pgvect
 
 * **Naturaleza:** Aplicación Web de acceso restringido (Next.js).
 * **Usuarios:** Analistas de la Unidad Técnica de lo Contencioso Electoral (UTCE).
-* **Autenticación:** Directorio activo institucional / Soporte OIDC y Firma Electrónica Avanzada en producción.
+* **Autenticación:** Base institucional mínima con roles reales y sesiones JWT. Soporte OIDC y Firma Electrónica Avanzada están en objetivo futuro (fase 2), no en el MVP.
 * **Acceso a datos:** Lectura del flujo global de menciones ingeridas, escritura en la tabla de alertas centralizadas y gestión de bitácoras de auditoría.
 
 ### B. Aplicación para Mujeres Protegidas (Módulos Machiyotl + Cese Inmediato + Chimalli)
@@ -55,8 +55,8 @@ El sistema utiliza un único backend centralizado (FastAPI + PostgreSQL + pgvect
 
 * **Lo que SÍ hace:**
   * Ingiere de forma continua menciones públicas dirigidas a las cuentas autorizadas utilizando adaptadores intercambiables (APIs de Reddit, YouTube y mocks institucionales de X/Facebook).
-  * Aplica un modelo NLP supervisado (BETO/DeepSeek) para clasificar texto bajo las 19 conductas del Art. 20 Ter de la LGAMVLV.
-  * Ejecuta algoritmos de clustering temporal y semántico (DBSCAN + NetworkX) para detectar ráfagas de acoso o campañas coordinadas (*astroturfing*).
+  * Aplica un modelo NLP supervisado (BETO/DeepSeek) para clasificar texto bajo las 19 conductas del Art. 20 Ter de la LGAMVLV. **Objetivo futuro; el MVP usa reglas explicables iniciales sin clasificación legal definitiva.**
+  * Ejecuta algoritmos de clustering temporal y semántico (DBSCAN + NetworkX) para detectar ráfagas de acoso o campañas coordinadas (*astroturfing*). **Objetivo futuro; fuera del MVP actual.**
   * Presenta un panel con semáforos de riesgo explicables para la analista humana.
 
 * **Lo que NO hace:**
@@ -276,8 +276,8 @@ Payload final estructurado por el agente de DeepSeek-V3 tras completar la intera
     "element_1_political_link": true,
     "element_2_gender_component": true,
     "element_3_rights_infringement": true,
-    "final_verdict": "VPMRG_CONFIRMED_ASSISTIVE",
-    "confidence_degree": "HIGH",
+    "final_verdict": "possible_vpmrg",
+    "confidence_degree": "requires_human_review",
     "citation_precedents": [
       "Art. 20 Bis LGAMVLV",
       "Jurisprudencia TEPJF 21/2020-VPMRG"
@@ -295,5 +295,9 @@ Payload final estructurado por el agente de DeepSeek-V3 tras completar la intera
 ---
 
 ## Conclusiones de Uso para el Repositorio
+
+> **Nota sobre alcance MVP actual:** Los contratos JSON presentados en este documento representan la especificación objetivo a largo plazo del ecosistema. En el MVP actual se implementan solo las capacidades base: login institucional con roles reales, ingesta controlada desde Reddit mediante API oficial, alertas asistivas con reglas explicables (no clasificación legal definitiva), y revisión humana. Capacidades señaladas como "objetivo futuro" (OIDC, Firma Electrónica, BETO/DeepSeek clasificador definitivo, DBSCAN/NetworkX, envío a Oficialía de Partes) quedan fuera del MVP y deben documentarse como fase 2.
+>
+> **Vocabulario de riesgo:** El sistema usa exclusivamente `low`, `medium`, `high`, `unclassified` para niveles de riesgo asistivo. Nunca se emite `confirmed` como resultado de una regla o modelo automático.
 
 Este archivo `module-interaction-flow.md` dota al proyecto de la rigurosidad corporativa y jurídica que se espera de una propuesta enfocada en la ciberdemocracia. Al leer este documento, los evaluadores técnicos y legales sabrán exactamente qué código está operando en el cliente de forma segura (*zero-knowledge*), qué lógica corre en la API distribuida y cómo se garantiza el principio crítico de *human-in-the-loop*.
