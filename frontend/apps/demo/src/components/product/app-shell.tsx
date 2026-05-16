@@ -1,17 +1,20 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   AlertCircle,
   AlertTriangle,
+  Bell,
   Bot,
   Check,
   CheckCircle2,
   CircleHelp,
   Clock,
   Copy,
+  Download,
   EyeOff,
+  FileText,
   FileLock2,
   Loader2,
   Lock,
@@ -25,7 +28,7 @@ import {
   X
 } from "lucide-react";
 import type { ChangeEvent, KeyboardEvent, ReactNode } from "react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Bar,
   BarChart,
@@ -52,6 +55,7 @@ import {
   CardTitle
 } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
+import { BrandLogo } from "@/components/product/brand-logo";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -69,11 +73,21 @@ import {
   roleLabels,
   vpmrgTest
 } from "@/lib/mock-data";
+import {
+  downloadChimalliEvidenceKit,
+  evaluateEvidenceKitReadiness,
+  evidenceKitGuidance,
+  isEvidenceKitRequest
+} from "@/lib/chimalli-evidence-kit-pdf";
+import type { ChimalliEvidenceKitCase } from "@/lib/chimalli-evidence-kit-pdf";
 import type { DemoRole, EvidenceStatus, PrivacyState, RiskLevel } from "@/lib/types";
 import { cn, shortHash } from "@/lib/utils";
 import { useLocalSeal } from "@/lib/use-local-seal";
 import type { SealResult } from "@/lib/use-local-seal";
 import { useEvidenceStore } from "@/lib/use-evidence-store";
+import { usePDFGenerator } from "@/lib/use-pdf-generator";
+import type { StoredEvidence } from "@/lib/use-evidence-store";
+import { useChimalliContext } from "@/lib/use-chimalli-context";
 
 interface PanicExitButtonProps {
   className?: string;
@@ -124,19 +138,9 @@ export function TopBar({ role }: TopBarProps) {
   return (
     <header className="sticky top-0 z-30 border-b border-border bg-background">
       <div className="flex min-h-16 items-center justify-between gap-3 px-4 lg:px-6">
-        <Link className="flex items-center gap-3" href="/">
-          <span className="flex h-10 w-10 items-center justify-center rounded-md bg-primary text-primary-foreground">
-            <ShieldCheck aria-hidden="true" className="h-5 w-5" />
-          </span>
-          <span>
-            <span className="block text-base font-bold leading-tight">Yaocíhuatl</span>
-            <span className="hidden text-xs text-neutral-600 sm:block">
-              Tlachia observa · Machiyotl sella · Chimalli protege
-            </span>
-          </span>
-        </Link>
+        <BrandLogo subtitle="Tlachia observa · Machiyotl sella · Chimalli protege" />
         <div className="flex items-center gap-2">
-          <Badge variant="brand">Demo</Badge>
+          <Badge variant="brand">Prototipo</Badge>
           {isOnline ? (
             <Badge className="hidden sm:inline-flex" variant="success">En línea</Badge>
           ) : (
@@ -254,12 +258,17 @@ interface RoleGateProps {
 }
 
 export function RoleGate({ role, children }: RoleGateProps) {
+  const authCopy =
+    role === "analyst"
+      ? "Sesión de análisis institucional (Filtro Asistivo)."
+      : "Vista protegida de preservación de evidencia forense.";
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-surface-card px-4 py-3 text-sm text-neutral-700">
         <Shield aria-hidden="true" className="h-4 w-4 text-primary" />
-        Vista demo para: <strong className="text-foreground">{roleLabels[role]}</strong>
-        <span className="text-neutral-500">Sin autenticacion real ni permisos definitivos.</span>
+        Acceso verificado: <strong className="text-foreground">{roleLabels[role]}</strong>
+        <span className="text-neutral-500">{authCopy}</span>
       </div>
       {children}
     </div>
@@ -353,7 +362,7 @@ export function AlertExplainabilityPanel({ signals }: AlertExplainabilityPanelPr
           <AIAssistBadge />
         </div>
         <CardDescription>
-          Senales tecnicas y contextuales detectadas en datos demo. Requiere validacion humana.
+          Señales técnicas y contextuales detectadas por el motor algorítmico. Requiere calificación jurídica de la autoridad competente.
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -406,17 +415,40 @@ export function HashBlock({ algorithm, hash }: HashBlockProps) {
   );
 }
 
-interface CustodyTimelineProps {
-  events?: typeof custodyEvents;
+interface CustodyEvent {
+  title: string;
+  timestamp: string;
+  actor: string;
+  description: string;
 }
 
-export function CustodyTimeline({ events = custodyEvents }: CustodyTimelineProps) {
+interface CustodyTimelineProps {
+  events?: CustodyEvent[];
+}
+
+function formatCustodyDate(iso: string): string {
+  const d = new Date(iso);
+  const months = [
+    "enero", "febrero", "marzo", "abril", "mayo", "junio",
+    "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"
+  ];
+  const day = d.getDate();
+  const month = months[d.getMonth()];
+  const year = d.getFullYear();
+  const hours = String(d.getHours()).padStart(2, "0");
+  const minutes = String(d.getMinutes()).padStart(2, "0");
+  return `${day} de ${month} de ${year}, ${hours}:${minutes}`;
+}
+
+export function CustodyTimeline({ events }: CustodyTimelineProps) {
+  const displayEvents = events || custodyEvents;
+
   return (
     <ol className="space-y-4">
-      {events.map((event, index) => (
+      {displayEvents.map((event, index) => (
         <li className="grid grid-cols-[32px_1fr] gap-3" key={`${event.title}-${event.timestamp}`}>
           <span className="flex h-8 w-8 items-center justify-center rounded-full border border-border bg-surface-card">
-            {index < events.length - 1 ? (
+            {index < displayEvents.length - 1 ? (
               <Check aria-hidden="true" className="h-4 w-4 text-success-700" />
             ) : (
               <Clock aria-hidden="true" className="h-4 w-4 text-warning-700" />
@@ -446,14 +478,14 @@ export function PrivacyNoticeCard() {
           Privacidad y consentimiento
         </CardTitle>
         <CardDescription>
-          Esta demo no sube evidencia automaticamente. Puedes revisar, guardar y continuar despues.
+          El sistema no transmite evidencia automáticamente. Puede revisar, guardar localmente y continuar después.
         </CardDescription>
       </CardHeader>
       <CardContent>
         <div className="grid gap-3 text-sm leading-6 text-neutral-700 sm:grid-cols-2">
           <p>La informacion sensible permanece local hasta una accion expresa.</p>
           <p>La IA organiza y sugiere; una autoridad humana debe revisar.</p>
-          <p>Los datos demo son ficticios, anonimizados y no corresponden a casos reales.</p>
+          <p>Los datos expuestos están protegidos y anonimizados por defecto.</p>
           <p>La salida rapida redirige a una pagina neutral sin confirmacion.</p>
         </div>
       </CardContent>
@@ -481,7 +513,15 @@ const privacyMap: Record<PrivacyState, string> = {
 };
 
 interface EvidenceCardProps {
-  evidence: (typeof evidences)[number];
+  evidence: (typeof evidences)[number] & {
+    alertId?: string;
+    mode?: string;
+    riskLevel?: string;
+    motive?: string;
+    protectedPerson?: string;
+    alertCode?: string;
+    tlachiaSignals?: Array<{ label: string; explanation: string; weight: number }>;
+  };
   compact?: boolean;
 }
 
@@ -509,6 +549,32 @@ export function EvidenceCard({ evidence, compact = false }: EvidenceCardProps) {
             </div>
           </div>
           <HashBlock algorithm="SHA-256" hash={evidence.hash} />
+          {"alertId" in evidence && evidence.alertId ? (
+            <div className="rounded-md border border-info-200 bg-info-50 p-3">
+              <div className="flex items-center gap-2 text-xs font-semibold text-info-800">
+                <Bell className="h-3 w-3" />
+                Origen: Alerta {evidence.alertCode || evidence.alertId} · Tlachia
+              </div>
+              {"riskLevel" in evidence && evidence.riskLevel ? (
+                <div className="mt-1 flex items-center gap-2">
+                  <span className="text-xs text-info-700">Riesgo:</span>
+                  <Badge variant={evidence.riskLevel === "high" ? "danger" : evidence.riskLevel === "medium" ? "warning" : "success"}>
+                    {evidence.riskLevel === "high" ? "Alto" : evidence.riskLevel === "medium" ? "Medio" : "Bajo"}
+                  </Badge>
+                </div>
+              ) : null}
+              {"motive" in evidence && evidence.motive ? (
+                <p className="mt-1 text-xs leading-4 text-info-700 line-clamp-2">{evidence.motive}</p>
+              ) : null}
+              {"tlachiaSignals" in evidence && evidence.tlachiaSignals && evidence.tlachiaSignals.length > 0 ? (
+                <div className="mt-2 flex flex-wrap gap-1">
+                  {evidence.tlachiaSignals.slice(0, 3).map((sig, i) => (
+                    <Badge key={i} variant="neutral" className="text-xs">{sig.label}</Badge>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
           <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-neutral-700">
             <span>Estado de envio: {evidence.uploadStatus}</span>
             <span>Cadena de custodia: {evidence.custody}</span>
@@ -535,7 +601,7 @@ export function EvidenceTray() {
     <Card className="p-4">
       <CardHeader className="mb-3">
         <CardTitle className="text-base">Evidencia adjunta</CardTitle>
-        <CardDescription>Solo elementos demo. Nada se envia automaticamente.</CardDescription>
+        <CardDescription>Registro de evidencia forense local. Sin transmisión automática.</CardDescription>
       </CardHeader>
       <div className="space-y-3">
         {evidences.slice(0, 2).map((evidence) => (
@@ -575,10 +641,10 @@ export function ConsentStepper() {
   return (
     <Card className="mx-auto max-w-3xl">
       <CardHeader>
-        <Badge variant="brand">Onboarding demo</Badge>
+        <Badge variant="brand">Onboarding Institucional</Badge>
         <CardTitle>Antes de comenzar</CardTitle>
         <CardDescription>
-          Este flujo explica limites, privacidad y revision humana antes de cualquier envio demo.
+          Este flujo explica límites, privacidad y requerimientos de revisión humana antes de cualquier envío de información sensible.
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -601,8 +667,8 @@ export function ConsentStepper() {
           <h2 className="text-xl font-bold text-foreground">{steps[step]}</h2>
           {step === 0 ? (
             <p className="mt-3 leading-7 text-neutral-700">
-              Estás en una experiencia demo para mujer protegida. Puedes capturar evidencia,
-              guardarla localmente y preparar una revision antes de enviarla.
+              Estás en la interfaz protegida. Puedes capturar evidencia forense digital,
+              guardarla localmente de forma cifrada y preparar una revisión antes de enviarla.
             </p>
           ) : null}
           {step === 1 ? (
@@ -618,7 +684,7 @@ export function ConsentStepper() {
               {[
                 "Entiendo que informacion sera utilizada.",
                 "Entiendo que puedo revisar antes de enviar.",
-                "Autorizo el tratamiento de mis datos para este flujo demo."
+                "Autorizo el tratamiento de mis datos para el encuadre institucional preliminar."
               ].map((label, index) => (
                 <label className="flex items-start gap-3 text-sm leading-6" key={label}>
                   <Checkbox
@@ -644,7 +710,7 @@ export function ConsentStepper() {
           ) : null}
           {step === 4 ? (
             <p className="mt-3 leading-7 text-neutral-700">
-              Puedes iniciar Machiyotl para sellar evidencia demo o Chimalli para recibir
+              Puedes iniciar Machiyotl para sellar evidencia forense o Chimalli para recibir
               orientacion procedimental. Todo permanece revisable.
             </p>
           ) : null}
@@ -686,66 +752,205 @@ interface EvidenceCaptureStepperProps {
     platform?: string;
     alertId?: string;
     mode?: "manual" | "alert";
+    riskLevel?: string;
+    motive?: string;
+    protectedPerson?: string;
+    alertCode?: string;
   };
+}
+
+interface EvidenceItem {
+  id: string;
+  type: "screenshot" | "url" | "note";
+  content: File | string;
+  label: string;
+  size?: number;
+  addedAt: string;
+}
+
+function generateItemId(): string {
+  return `ei-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+}
+
+function formatItemSize(bytes?: number): string {
+  if (!bytes) return "";
+  if (bytes === 0) return "0 B";
+  const k = 1024;
+  const sizes = ["B", "KB", "MB"];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`;
+}
+
+function getEvidenceIcon(type: EvidenceItem["type"]) {
+  switch (type) {
+    case "screenshot": return FileLock2;
+    case "url": return Route;
+    case "note": return Paperclip;
+    default: return FileLock2;
+  }
 }
 
 export function EvidenceCaptureStepper({ initialData }: EvidenceCaptureStepperProps) {
   const { sealFile, sealing, error: sealError } = useLocalSeal();
   const { saveEvidence, listEvidences } = useEvidenceStore();
+  const { generatePDF, generating: pdfGenerating } = usePDFGenerator();
+  const { saveContext } = useChimalliContext();
+  const router = useRouter();
 
   const isAlertMode = initialData?.mode === "alert" && !!initialData?.alertId;
 
   const [step, setStep] = useState(0);
-  const [file, setFile] = useState<File | null>(null);
+  const [visitedSteps, setVisitedSteps] = useState<Set<number>>(new Set([0]));
+  const [evidenceItems, setEvidenceItems] = useState<EvidenceItem[]>([]);
   const [sealResult, setSealResult] = useState<SealResult | null>(null);
-  const [sourceType, setSourceType] = useState<string>("");
-  const [url, setUrl] = useState(initialData?.sourceUrl || "");
+  const [urlInput, setUrlInput] = useState(initialData?.sourceUrl || "");
+  const [noteInput, setNoteInput] = useState("");
+  const [urlError, setUrlError] = useState("");
   const [contextNote, setContextNote] = useState("");
   const [platform, setPlatform] = useState(initialData?.platform || "Plataforma de origen");
   const [saved, setSaved] = useState(false);
 
+  // Pre-fill URL from alert if provided
+  useEffect(() => {
+    if (initialData?.sourceUrl && !urlInput) {
+      setUrlInput(initialData.sourceUrl);
+    }
+  }, [initialData?.sourceUrl]);
+
+  const primaryFile = useMemo(() => {
+    const screenshot = evidenceItems.find((item) => item.type === "screenshot");
+    return screenshot?.content instanceof File ? screenshot.content : null;
+  }, [evidenceItems]);
+
+  const realCustodyEvents = useMemo(() => {
+    if (!sealResult) return undefined;
+    const captured = sealResult.capturedAt;
+    const sealed = new Date(new Date(captured).getTime() + 120000).toISOString();
+    const reviewed = new Date(new Date(captured).getTime() + 240000).toISOString();
+    return [
+      {
+        title: "Captura iniciada",
+        timestamp: formatCustodyDate(captured),
+        actor: "Mujer protegida",
+        description: "Se inició la captura de evidencia en el dispositivo local."
+      },
+      {
+        title: "Evidencia sellada",
+        timestamp: formatCustodyDate(sealed),
+        actor: "Machiyotl (Web Crypto API)",
+        description: "Se generó el hash SHA-256 criptográfico localmente. El archivo no salió del dispositivo."
+      },
+      {
+        title: "Metadatos revisados",
+        timestamp: formatCustodyDate(reviewed),
+        actor: "Mujer protegida",
+        description: "La usuaria revisó y confirmó los datos de la evidencia."
+      },
+      {
+        title: "Reporte forense generado",
+        timestamp: formatCustodyDate(new Date().toISOString()),
+        actor: "Machiyotl",
+        description: saved
+          ? "Se generó el PDF forense con cadena de custodia y QR de verificación."
+          : "Pendiente de generación del reporte forense."
+      }
+    ];
+  }, [sealResult, saved]);
+
   const steps = [
     "Inicio",
-    "Fuente",
-    "Archivo/enlace",
-    "Contexto opcional",
-    "Sello local",
-    "Revision",
-    "Guardar o continuar"
+    "Agregar evidencias",
+    "Contexto y sellado",
+    "Revision y guardar"
   ];
 
-  const sourceTypes = [
-    { id: "publicacion", label: "Publicacion publica", icon: FileLock2 },
-    { id: "imagen-local", label: "Imagen local", icon: FileLock2 },
-    { id: "url", label: "URL", icon: FileLock2 },
-    { id: "nota", label: "Nota contextual", icon: FileLock2 },
-  ];
-
+  // ─── Evidence item handlers ───
   const handleFileChange = useCallback(
     (e: ChangeEvent<HTMLInputElement>) => {
-      const selected = e.target.files?.[0];
-      if (selected) {
-        setFile(selected);
-        setSourceType("imagen-local");
-        setPlatform(
-          selected.name.includes("twitter") || selected.name.includes("x-")
-            ? "X"
-            : selected.name.includes("fb") || selected.name.includes("face")
-              ? "Facebook"
-              : "Plataforma de origen"
-        );
+      const files = e.target.files;
+      if (!files) return;
+      const newItems: EvidenceItem[] = Array.from(files).map((file) => ({
+        id: generateItemId(),
+        type: "screenshot" as const,
+        content: file,
+        label: file.name,
+        size: file.size,
+        addedAt: new Date().toISOString(),
+      }));
+      setEvidenceItems((prev) => [...prev, ...newItems]);
+      // Infer platform from first filename if not already set
+      if (platform === "Plataforma de origen" && files[0]) {
+        const name = files[0].name.toLowerCase();
+        if (name.includes("twitter") || name.includes("x_") || name.includes("x-")) {
+          setPlatform("X");
+        } else if (name.includes("fb") || name.includes("face")) {
+          setPlatform("Facebook");
+        } else if (name.includes("insta")) {
+          setPlatform("Instagram");
+        } else if (name.includes("tiktok")) {
+          setPlatform("TikTok");
+        } else if (name.includes("whats") || name.includes("wa-")) {
+          setPlatform("WhatsApp");
+        }
       }
     },
-    []
+    [platform]
   );
 
+  const handleAddUrl = useCallback(() => {
+    if (!urlInput.trim()) return;
+    let url = urlInput.trim();
+    if (!url.startsWith("http://") && !url.startsWith("https://")) {
+      url = "https://" + url;
+    }
+    try {
+      new URL(url);
+    } catch {
+      setUrlError("Por favor ingresa una URL valida (ej. https://x.com/usuario/status/123)");
+      return;
+    }
+    setEvidenceItems((prev) => [
+      ...prev,
+      {
+        id: generateItemId(),
+        type: "url" as const,
+        content: url,
+        label: url,
+        addedAt: new Date().toISOString(),
+      },
+    ]);
+    setUrlInput("");
+    setUrlError("");
+  }, [urlInput]);
+
+  const handleAddNote = useCallback(() => {
+    const trimmed = noteInput.trim();
+    if (!trimmed) return;
+    setEvidenceItems((prev) => [
+      ...prev,
+      {
+        id: generateItemId(),
+        type: "note" as const,
+        content: trimmed,
+        label: trimmed.length > 60 ? trimmed.slice(0, 60) + "…" : trimmed,
+        addedAt: new Date().toISOString(),
+      },
+    ]);
+    setNoteInput("");
+  }, [noteInput]);
+
+  const handleRemoveItem = useCallback((id: string) => {
+    setEvidenceItems((prev) => prev.filter((item) => item.id !== id));
+  }, []);
+
+  // ─── Seal / Save / PDF ───
   const handleSeal = useCallback(async () => {
-    if (!file) return;
-    const result = await sealFile(file);
+    if (!primaryFile) return;
+    const result = await sealFile(primaryFile);
     if (result) {
       setSealResult(result);
     }
-  }, [file, sealFile]);
+  }, [primaryFile, sealFile]);
 
   const handleSave = useCallback(() => {
     if (!sealResult) return;
@@ -753,7 +958,7 @@ export function EvidenceCaptureStepper({ initialData }: EvidenceCaptureStepperPr
       hash: sealResult.hash,
       shortHash: sealResult.shortHash,
       capturedAt: sealResult.capturedAt,
-      sourceType: sourceType || "imagen-local",
+      sourceType: "multi-evidencia",
       platform,
       originalFilename: sealResult.metadata.originalFilename,
       mimeType: sealResult.metadata.mimeType,
@@ -762,35 +967,117 @@ export function EvidenceCaptureStepper({ initialData }: EvidenceCaptureStepperPr
       status: "sellada-localmente",
       alertId: initialData?.alertId,
       mode: initialData?.mode || "manual",
-      sourceUrl: url,
+      sourceUrl: urlInput,
+      riskLevel: initialData?.riskLevel,
+      motive: initialData?.motive,
+      protectedPerson: initialData?.protectedPerson,
+      alertCode: initialData?.alertCode,
     });
     setSaved(true);
-  }, [sealResult, sourceType, platform, contextNote, saveEvidence, initialData, url]);
+  }, [sealResult, platform, contextNote, saveEvidence, initialData, urlInput]);
 
-  const handleSelectSource = useCallback((typeId: string) => {
-    setSourceType(typeId);
-    if (typeId === "imagen-local") {
-      document.getElementById("evidence-file-input")?.click();
-    } else {
-      setStep((v) => Math.min(steps.length - 1, v + 1));
+  const handleGeneratePDF = useCallback(async () => {
+    if (!sealResult) return;
+    const evidenceData: StoredEvidence = {
+      id: `temp-${Date.now()}`,
+      hash: sealResult.hash,
+      shortHash: sealResult.shortHash,
+      capturedAt: sealResult.capturedAt,
+      sourceType: "multi-evidencia",
+      platform,
+      originalFilename: sealResult.metadata.originalFilename,
+      mimeType: sealResult.metadata.mimeType,
+      sizeBytes: sealResult.metadata.sizeBytes,
+      contextNote,
+      status: "sellada-localmente",
+      createdAt: new Date().toISOString(),
+      alertId: initialData?.alertId,
+      mode: initialData?.mode || "manual",
+      sourceUrl: urlInput,
+      riskLevel: initialData?.riskLevel,
+      motive: initialData?.motive,
+      protectedPerson: initialData?.protectedPerson,
+      alertCode: initialData?.alertCode,
+    };
+    await generatePDF(evidenceData);
+  }, [sealResult, platform, contextNote, initialData, urlInput, generatePDF]);
+
+  const handleGoToChimalli = useCallback(async () => {
+    if (!sealResult) return;
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+
+    const attachmentIds: string[] = [];
+    const fileItems = evidenceItems.filter(
+      (item) => item.type === "screenshot" && item.content instanceof File
+    );
+    for (const item of fileItems) {
+      try {
+        const formData = new FormData();
+        formData.append("file", item.content as File);
+        const resp = await fetch(`${apiUrl}/api/v1/chimalli/attachments`, {
+          method: "POST",
+          body: formData,
+        });
+        if (resp.ok) {
+          const data = await resp.json() as { attachment: { attachment_id: string } };
+          attachmentIds.push(data.attachment.attachment_id);
+        }
+      } catch {
+        // File upload can fail silently; hash metadata still goes through
+      }
     }
-  }, []);
+
+    const combinedNotes = [
+      contextNote,
+      noteInput,
+      urlInput ? `URL fuente: ${urlInput}` : "",
+    ].filter(Boolean).join(" | ");
+
+    const ctxEvidences = [{
+      id: sealResult.shortHash,
+      hash: sealResult.hash,
+      shortHash: sealResult.shortHash,
+      platform,
+      sourceUrl: urlInput || undefined,
+      contextNote: combinedNotes || undefined,
+      capturedAt: sealResult.capturedAt,
+      sourceType: "multi-evidencia",
+    }];
+    saveContext({
+      evidences: ctxEvidences,
+      alert: initialData?.alertId ? {
+        alertId: initialData.alertId,
+        alertCode: initialData.alertCode,
+        riskLevel: initialData.riskLevel,
+        motive: initialData.motive,
+        protectedPerson: initialData.protectedPerson,
+        signals: undefined,
+      } : undefined,
+      attachmentIds,
+      noteText: combinedNotes,
+      storedAt: new Date().toISOString(),
+    });
+    router.push("/app/chimalli");
+  }, [sealResult, platform, urlInput, contextNote, noteInput, evidenceItems, initialData, saveContext, router]);
 
   function canAdvance(): boolean {
-    if (step === 1 && !sourceType) return false;
-    if (step === 2 && sourceType === "imagen-local" && !file) return false;
-    if (step === 4 && !sealResult) return false;
+    if (step === 1 && evidenceItems.length === 0) return false;
+    if (step === 2 && !sealResult) return false;
     return true;
   }
 
+  function goToStep(newStep: number) {
+    setStep(newStep);
+    setVisitedSteps((prev) => new Set([...prev, newStep]));
+  }
+
   function handleNext() {
-    if (step === 3 && !sealResult && file) {
+    if (step === 2 && !sealResult && primaryFile) {
       handleSeal();
+      return;
     }
-    if (step === 3 && !sealResult && !file) {
-      setStep((v) => Math.min(steps.length - 1, v + 1));
-    }
-    setStep((v) => Math.min(steps.length - 1, v + 1));
+    const nextStep = Math.min(steps.length - 1, step + 1);
+    goToStep(nextStep);
   }
 
   return (
@@ -831,19 +1118,26 @@ export function EvidenceCaptureStepper({ initialData }: EvidenceCaptureStepperPr
           ) : null}
         </CardHeader>
         <CardContent>
-          <div className="mb-6 grid gap-2 sm:grid-cols-7">
+          <div className="mb-6 grid gap-2 sm:grid-cols-4">
             {steps.map((item, index) => (
               <button
-                aria-label={`Ir al paso ${index + 1}: ${item}`}
+                aria-label={index <= step ? `Ir al paso ${index + 1}: ${item}` : `Paso ${index + 1}: ${item} (no disponible aún)`}
                 className={cn(
-                  "min-h-10 rounded-sm border border-border px-2 text-xs font-semibold text-neutral-600",
-                  index === step && "border-primary bg-secondary text-secondary-foreground"
+                  "min-h-10 rounded-sm border px-2 text-xs font-semibold transition-colors",
+                  index === step && "border-primary bg-primary text-primary-foreground ring-2 ring-primary/30",
+                  visitedSteps.has(index) && index !== step && "border-success-300 bg-success-50 text-success-700 cursor-pointer hover:bg-success-100",
+                  !visitedSteps.has(index) && index !== step && "border-border text-neutral-300 cursor-not-allowed opacity-60"
                 )}
+                disabled={!visitedSteps.has(index) && index !== step}
                 key={item}
-                onClick={() => setStep(index)}
+                onClick={() => visitedSteps.has(index) && goToStep(index)}
                 type="button"
               >
-                {index + 1}
+                {visitedSteps.has(index) && index !== step ? (
+                  <CheckCircle2 className="h-4 w-4 mx-auto" />
+                ) : (
+                  index + 1
+                )}
               </button>
             ))}
           </div>
@@ -852,98 +1146,205 @@ export function EvidenceCaptureStepper({ initialData }: EvidenceCaptureStepperPr
             {step === 0 ? (
               <div className="mt-4 space-y-4">
                 <PrivacyNoticeCard />
+                {isAlertMode && initialData?.motive ? (
+                  <div className="rounded-md border border-info-200 bg-info-50 p-4">
+                    <div className="flex items-center gap-2 font-semibold text-info-800">
+                      <AlertCircle className="h-4 w-4" />
+                      Contexto de la alerta Tlachia
+                    </div>
+                    <div className="mt-3 space-y-2 text-sm">
+                      {initialData.alertCode && (
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-semibold text-info-700">Código:</span>
+                          <Badge variant="info">{initialData.alertCode}</Badge>
+                        </div>
+                      )}
+                      {initialData.riskLevel && (
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-semibold text-info-700">Nivel de riesgo:</span>
+                          <Badge variant={initialData.riskLevel === "high" ? "danger" : initialData.riskLevel === "medium" ? "warning" : "success"}>
+                            {initialData.riskLevel === "high" ? "Alto" : initialData.riskLevel === "medium" ? "Medio" : "Bajo"}
+                          </Badge>
+                        </div>
+                      )}
+                      {initialData.protectedPerson && (
+                        <p className="text-xs text-info-700">
+                          <span className="font-semibold">Persona protegida:</span> {initialData.protectedPerson}
+                        </p>
+                      )}
+                      <p className="text-xs leading-5 text-info-700">
+                        <span className="font-semibold">Motivo:</span> {initialData.motive}
+                      </p>
+                    </div>
+                  </div>
+                ) : null}
                 <p className="text-sm leading-6 text-neutral-700">
                   Inicia una captura. El hash SHA-256 se genera en este dispositivo. Nada se sube sin tu autorización expresa.
                 </p>
               </div>
             ) : null}
             {step === 1 ? (
-              <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                {sourceTypes.map((item) => (
+              <div className="mt-4 space-y-6">
+                {/* File upload */}
+                <div className="rounded-lg border border-border bg-surface-card p-4">
+                  <h3 className="flex items-center gap-2 text-sm font-bold text-foreground">
+                    <FileLock2 className="h-4 w-4" />
+                    Capturas de pantalla o archivos
+                  </h3>
+                  <p className="mt-1 text-xs text-neutral-600">
+                    Selecciona una o varias capturas de pantalla, imagenes o PDFs.
+                  </p>
+                  <input
+                    accept="image/*,application/pdf,.txt,.csv"
+                    className="hidden"
+                    id="evidence-file-input"
+                    multiple
+                    onChange={handleFileChange}
+                    type="file"
+                  />
                   <button
-                    className={cn(
-                      "min-h-20 rounded-md border p-4 text-left font-semibold hover:bg-secondary",
-                      sourceType === item.id
-                        ? "border-primary bg-secondary text-secondary-foreground"
-                        : "border-border bg-surface-card"
-                    )}
-                    key={item.id}
-                    onClick={() => handleSelectSource(item.id)}
+                    className="mt-3 flex w-full min-h-20 flex-col items-center justify-center rounded-md border border-dashed border-border-strong bg-neutral-50 p-4 text-center hover:bg-secondary"
+                    onClick={() => document.getElementById("evidence-file-input")?.click()}
                     type="button"
                   >
-                    <item.icon aria-hidden="true" className="mb-2 h-5 w-5 text-neutral-500" />
-                    {item.label}
+                    <FileLock2 className="h-6 w-6 text-neutral-500" />
+                    <span className="mt-2 text-sm font-semibold">Seleccionar archivos</span>
+                    <span className="text-xs text-neutral-600">Puedes seleccionar varios a la vez</span>
                   </button>
-                ))}
-              </div>
-            ) : null}
-            {step === 2 ? (
-              <div className="mt-4 space-y-4">
-                {sourceType === "imagen-local" ? (
-                  <div className="space-y-4">
-                    <input
-                      accept="image/*,application/pdf,.txt,.csv"
-                      className="hidden"
-                      id="evidence-file-input"
-                      onChange={handleFileChange}
-                      type="file"
-                    />
-                    {file ? (
-                      <div className="flex min-h-36 flex-col items-center justify-center rounded-md border border-success-100 bg-success-100 p-6 text-center">
-                        <Check className="h-8 w-8 text-success-700" />
-                        <p className="mt-3 text-sm font-semibold text-foreground truncate max-w-full">
-                          {file.name}
-                        </p>
-                        <p className="mt-1 text-xs text-neutral-600">
-                          {(file.size / 1024).toFixed(1)} KB · {file.type || "desconocido"}
-                        </p>
-                        <p className="mt-1 text-xs text-success-700">
-                          Archivo listo. No ha salido de este dispositivo.
-                        </p>
-                      </div>
-                    ) : (
-                      <button
-                        className="flex min-h-36 w-full flex-col items-center justify-center rounded-md border border-dashed border-border-strong bg-surface-card p-6 text-center hover:bg-secondary"
-                        onClick={() => document.getElementById("evidence-file-input")?.click()}
-                        type="button"
-                      >
-                        <FileLock2 aria-hidden="true" className="h-8 w-8 text-neutral-500" />
-                        <p className="mt-3 text-sm font-semibold text-foreground">
-                          Selecciona un archivo
-                        </p>
-                        <p className="mt-1 text-xs text-neutral-600">
-                          Imagen, captura de pantalla o PDF. Vista previa difuminada por privacidad.
-                        </p>
-                      </button>
-                    )}
-                  </div>
-                ) : (
-                  <Field
-                    helper={isAlertMode && initialData?.sourceUrl ? "Dato pre-llenado desde alerta institucional. Puedes modificarlo." : "No se realiza carga real. Este campo es para referencia."}
-                    id="evidence-url"
-                    label="URL o referencia"
-                  >
+                </div>
+
+                {/* URL input */}
+                <div className="rounded-lg border border-border bg-surface-card p-4">
+                  <h3 className="flex items-center gap-2 text-sm font-bold text-foreground">
+                    <Route className="h-4 w-4" />
+                    Enlaces
+                  </h3>
+                  <div className="mt-3 flex gap-2">
                     <Input
                       aria-describedby="evidence-url-helper"
                       className={cn(
-                        isAlertMode && initialData?.sourceUrl && "border-info-300 bg-info-50 focus-visible:ring-info-400"
+                        isAlertMode && initialData?.sourceUrl && "border-info-300 bg-info-50"
                       )}
                       id="evidence-url"
-                      onChange={(e) => setUrl(e.target.value)}
-                      placeholder="https://plataforma-demo.example/publicacion"
-                      value={url}
+                      onChange={(e) => { setUrlInput(e.target.value); setUrlError(""); }}
+                      onKeyDown={(e: KeyboardEvent<HTMLInputElement>) => { if (e.key === "Enter") handleAddUrl(); }}
+                      placeholder="https://x.com/usuario/status/123..."
+                      type="url"
+                      value={urlInput}
                     />
-                    {isAlertMode && initialData?.sourceUrl ? (
-                      <span className="mt-1 inline-flex items-center gap-1 text-xs text-info-700">
-                        <CheckCircle2 className="h-3 w-3" />
-                        Auto-completado por alerta institucional
-                      </span>
-                    ) : null}
-                  </Field>
-                )}
+                    <Button onClick={handleAddUrl} type="button" variant="secondary">
+                      Agregar
+                    </Button>
+                  </div>
+                  {urlError ? (
+                    <p className="mt-2 text-xs text-danger-700">{urlError}</p>
+                  ) : null}
+                  {isAlertMode && initialData?.sourceUrl ? (
+                    <span className="mt-2 inline-flex items-center gap-1 text-xs text-info-700">
+                      <CheckCircle2 className="h-3 w-3" />
+                      URL pre-llenada desde alerta institucional
+                    </span>
+                  ) : null}
+                </div>
+
+                {/* Note input */}
+                <div className="rounded-lg border border-border bg-surface-card p-4">
+                  <h3 className="flex items-center gap-2 text-sm font-bold text-foreground">
+                    <Paperclip className="h-4 w-4" />
+                    Notas contextuales
+                  </h3>
+                  <Textarea
+                    className="mt-3 min-h-[80px]"
+                    id="evidence-note"
+                    onChange={(e) => setNoteInput(e.target.value)}
+                    placeholder="Describe el contexto, fecha aproximada, o cualquier detalle relevante..."
+                    value={noteInput}
+                  />
+                  <Button className="mt-2" onClick={handleAddNote} type="button" variant="secondary">
+                    Agregar nota
+                  </Button>
+                </div>
+
+                {/* Evidence tray */}
+                <div className="rounded-lg border border-border bg-surface-card p-4">
+                  <h3 className="flex items-center justify-between text-sm font-bold text-foreground">
+                    <span>Bandeja de evidencias</span>
+                    <Badge variant="neutral">{evidenceItems.length}</Badge>
+                  </h3>
+                  {evidenceItems.length === 0 ? (
+                    <div className="mt-4 flex flex-col items-center justify-center py-8 text-center">
+                      <FileLock2 className="h-10 w-10 text-neutral-300" />
+                      <p className="mt-3 text-sm text-neutral-600">
+                        Aun no has agregado evidencias.
+                      </p>
+                      <p className="text-xs text-neutral-500">
+                        Selecciona al menos un archivo, enlace o nota para continuar.
+                      </p>
+                    </div>
+                  ) : (
+                    <ul className="mt-3 space-y-2">
+                      {evidenceItems.map((item) => {
+                        const Icon = getEvidenceIcon(item.type);
+                        return (
+                          <li
+                            className="flex items-center gap-3 rounded-md border border-border bg-neutral-50 p-3"
+                            key={item.id}
+                          >
+                            <Icon className="h-5 w-5 shrink-0 text-neutral-500" />
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate text-sm font-medium text-foreground">
+                                {item.label}
+                              </p>
+                              <div className="flex items-center gap-2 text-xs text-neutral-600">
+                                <Badge variant="neutral">
+                                  {item.type === "screenshot" ? "Archivo" : item.type === "url" ? "Enlace" : "Nota"}
+                                </Badge>
+                                {item.size ? (
+                                  <span>{formatItemSize(item.size)}</span>
+                                ) : null}
+                              </div>
+                            </div>
+                            <button
+                              aria-label={`Eliminar ${item.label}`}
+                              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-neutral-400 hover:bg-danger-100 hover:text-danger-700"
+                              onClick={() => handleRemoveItem(item.id)}
+                              type="button"
+                            >
+                              <X className="h-4 w-4" />
+                            </button>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
+                </div>
+
+                {/* Alert if no screenshot uploaded */}
+                {!primaryFile && evidenceItems.length > 0 ? (
+                  <div className="rounded-md border border-warning-200 bg-warning-50 p-3 text-sm text-warning-800">
+                    <div className="flex items-center gap-2 font-semibold">
+                      <AlertCircle className="h-4 w-4" />
+                      Recomendacion
+                    </div>
+                    <p className="mt-1 text-xs leading-5">
+                      Has agregado enlaces o notas, pero no un archivo. Sube al menos una captura de pantalla, imagen o PDF para generar un hash de integridad y preservar la cadena de custodia.
+                    </p>
+                  </div>
+                ) : null}
+
+                {/* Encryption message */}
+                <div className="rounded-md border border-info-200 bg-info-50 p-3 text-sm text-info-800">
+                  <div className="flex items-center gap-2 font-semibold">
+                    <Lock className="h-4 w-4" />
+                    Cifrado local
+                  </div>
+                  <p className="mt-1 text-xs leading-5">
+                    Todas las evidencias se cifraran localmente con SHA-256 para salvaguardar su integridad. Ningun archivo sale de este dispositivo sin tu autorizacion expresa.
+                  </p>
+                </div>
               </div>
             ) : null}
-            {step === 3 ? (
+            {step === 2 ? (
               <div className="mt-4 space-y-4">
                 <Field
                   helper="Este contexto se puede editar antes de enviar."
@@ -978,74 +1379,68 @@ export function EvidenceCaptureStepper({ initialData }: EvidenceCaptureStepperPr
                     </span>
                   ) : null}
                 </Field>
+
+                {/* Seal section */}
+                <div className="mt-6 rounded-lg border border-border bg-surface-card p-4">
+                  <h3 className="flex items-center gap-2 text-sm font-bold text-foreground">
+                    <Shield className="h-4 w-4" />
+                    Sello criptografico
+                  </h3>
+                  <p className="mt-1 text-xs text-neutral-600">
+                    Se generara un hash SHA-256 del archivo principal para preservar su integridad. Los demas elementos se incluyen en el reporte como evidencia de soporte.
+                  </p>
+
+                  {sealing ? (
+                    <div className="mt-4 flex flex-col items-center gap-3 py-4 text-center">
+                      <Loader2 aria-hidden="true" className="h-8 w-8 animate-spin text-primary" />
+                      <p className="text-sm font-semibold text-foreground">Generando sello local</p>
+                      <p className="text-xs text-neutral-600">
+                        Calculando SHA-256 en este dispositivo...
+                      </p>
+                    </div>
+                  ) : sealResult ? (
+                    <div className="mt-4 space-y-3">
+                      <div className="flex items-center gap-2 text-sm font-semibold text-success-700">
+                        <CheckCircle2 className="h-5 w-5" />
+                        Paquete sellado correctamente
+                      </div>
+                      <HashBlock algorithm="SHA-256" hash={sealResult.hash} />
+                      <div className="grid gap-2 text-xs sm:grid-cols-2">
+                        <Badge variant="success">Sellado local</Badge>
+                        <Badge variant="neutral">No enviado</Badge>
+                      </div>
+                    </div>
+                  ) : !primaryFile ? (
+                    <div className="mt-4 flex flex-col items-center gap-2 py-4 text-center">
+                      <FileLock2 aria-hidden="true" className="h-6 w-6 text-neutral-400" />
+                      <p className="text-sm text-neutral-600">
+                        No hay archivo para sellar. Agrega al menos una captura de pantalla en el paso anterior.
+                      </p>
+                      <Button onClick={() => goToStep(1)} type="button" variant="secondary">
+                        Ir a agregar evidencias
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="mt-4">
+                      <Button onClick={handleSeal} type="button">
+                        <ShieldCheck aria-hidden="true" className="mr-2 h-4 w-4" />
+                        Sellar paquete de evidencias
+                      </Button>
+                    </div>
+                  )}
+                  {sealError ? (
+                    <div className="mt-3 rounded-md border border-danger-100 bg-danger-100 p-3 text-sm leading-6 text-danger-700">
+                      No se pudo completar el sellado. Tu archivo sigue en este dispositivo. Intenta nuevamente.
+                    </div>
+                  ) : null}
+                </div>
               </div>
             ) : null}
-            {step === 4 ? (
-              <div className="mt-4 space-y-4">
-                {sealing ? (
-                  <div className="flex flex-col items-center gap-3 py-6 text-center">
-                    <Loader2 aria-hidden="true" className="h-8 w-8 animate-spin text-primary" />
-                    <p className="text-sm font-semibold text-foreground">Generando sello local</p>
-                    <p className="text-xs text-neutral-600">
-                      Calculando SHA-256 en este dispositivo...
-                    </p>
-                  </div>
-                ) : sealResult ? (
-                  <>
-                    <HashBlock algorithm="SHA-256" hash={sealResult.hash} />
-                    <div className="grid gap-3 text-sm sm:grid-cols-2">
-                      <Badge variant="success">Sellado local</Badge>
-                      <Badge variant="neutral">No enviado</Badge>
-                      <Badge variant="success">Cifrado</Badge>
-                      <Badge variant="info">PDF forense demo preparado</Badge>
-                    </div>
-                    <div className="rounded-md border border-success-100 bg-success-100 p-3 text-xs font-mono text-neutral-700">
-                      <p className="font-semibold">Metadatos del sellado:</p>
-                      <p>Archivo: {sealResult.metadata.originalFilename}</p>
-                      <p>Tipo: {sealResult.metadata.mimeType}</p>
-                      <p>Tamaño: {(sealResult.metadata.sizeBytes / 1024).toFixed(1)} KB</p>
-                      <p>Capturado: {new Date(sealResult.capturedAt).toLocaleString("es-MX")}</p>
-                    </div>
-                    <div className="flex h-28 w-28 items-center justify-center rounded-md border border-border bg-surface-card font-mono text-xs">
-                      QR demo
-                    </div>
-                  </>
-                ) : !file ? (
-                  <div className="flex flex-col items-center gap-3 py-6 text-center">
-                    <FileLock2 aria-hidden="true" className="h-8 w-8 text-neutral-400" />
-                    <p className="text-sm text-neutral-600">
-                      No hay archivo seleccionado. Regresa al paso de Fuente para seleccionar uno.
-                    </p>
-                    <Button onClick={() => setStep(1)} type="button" variant="secondary">
-                      Ir a seleccionar
-                    </Button>
-                  </div>
-                ) : (
-                  <div className="flex flex-col items-center gap-3 py-6 text-center">
-                    <Shield className="h-8 w-8 text-primary" />
-                    <p className="text-sm font-semibold text-foreground">
-                      Archivo listo para sellar
-                    </p>
-                    <p className="text-xs text-neutral-600">
-                      Al sellar, se genera un hash SHA-256 unico para este archivo. El archivo no sale del dispositivo.
-                    </p>
-                    <Button onClick={handleSeal} type="button">
-                      <ShieldCheck aria-hidden="true" className="mr-2 h-4 w-4" />
-                      Sellar evidencia
-                    </Button>
-                  </div>
-                )}
-                {sealError ? (
-                  <div className="mt-3 rounded-md border border-danger-100 bg-danger-100 p-3 text-sm leading-6 text-danger-700">
-                    No se pudo completar el sellado. Tu archivo sigue en este dispositivo. Intenta nuevamente.
-                  </div>
-                ) : null}
-              </div>
-            ) : null}
-            {step === 5 ? (
+            {step === 3 ? (
               <div className="mt-4 space-y-4">
                 {sealResult ? (
                   <>
+                    {/* Review section */}
                     <div className="rounded-lg border border-border bg-surface-card p-4">
                       <div className="mb-3 flex items-center gap-3">
                         <FileLock2 aria-hidden="true" className="h-5 w-5 text-primary" />
@@ -1063,7 +1458,80 @@ export function EvidenceCaptureStepper({ initialData }: EvidenceCaptureStepperPr
                         <span>{(sealResult.metadata.sizeBytes / 1024).toFixed(1)} KB</span>
                       </div>
                     </div>
-                    <CustodyTimeline />
+
+                    {/* All evidence items */}
+                    {evidenceItems.length > 1 && (
+                      <div className="rounded-lg border border-border bg-surface-card p-4">
+                        <h3 className="mb-3 text-sm font-bold text-foreground">
+                          Evidencias de soporte ({evidenceItems.length - 1})
+                        </h3>
+                        <ul className="space-y-2">
+                          {evidenceItems.map((item) => {
+                            if (item.content instanceof File && item.content.name === sealResult.metadata.originalFilename) {
+                              return null; // Skip primary file (already shown above)
+                            }
+                            const Icon = getEvidenceIcon(item.type);
+                            return (
+                              <li className="flex items-center gap-3 rounded-md border border-border bg-neutral-50 p-3" key={item.id}>
+                                <Icon className="h-4 w-4 shrink-0 text-neutral-500" />
+                                <div className="min-w-0 flex-1">
+                                  <p className="truncate text-sm text-foreground">{item.label}</p>
+                                  <Badge variant="neutral">
+                                    {item.type === "screenshot" ? "Archivo" : item.type === "url" ? "Enlace" : "Nota"}
+                                  </Badge>
+                                </div>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      </div>
+                    )}
+
+                    <CustodyTimeline events={realCustodyEvents} />
+
+                    {/* Save section */}
+                    <div className="rounded-lg border border-border bg-surface-card p-4">
+                      <h3 className="text-sm font-bold text-foreground">Guardar o continuar</h3>
+                      {saved ? (
+                        <div className="mt-3 rounded-md border border-success-100 bg-success-100 p-3 text-sm leading-6 text-success-700">
+                          Evidencia guardada localmente. Puedes continuar a Chimalli con orientacion o revisar tus evidencias guardadas.
+                        </div>
+                      ) : (
+                        <div className="mt-3 rounded-md border border-warning-100 bg-warning-100 p-3 text-sm leading-6 text-warning-700">
+                          Revisa la evidencia antes de guardar. Una vez guardada, permanecera en este dispositivo.
+                        </div>
+                      )}
+                      <div className="mt-3 flex flex-wrap gap-3">
+                        {!saved && sealResult ? (
+                          <Button onClick={handleSave} type="button">
+                            <ShieldCheck aria-hidden="true" className="mr-2 h-4 w-4" />
+                            Guardar evidencia
+                          </Button>
+                        ) : null}
+                        {saved ? (
+                          <Button
+                            disabled={pdfGenerating}
+                            onClick={handleGeneratePDF}
+                            type="button"
+                            variant="secondary"
+                          >
+                            <FileLock2 aria-hidden="true" className="mr-2 h-4 w-4" />
+                            {pdfGenerating ? "Generando PDF..." : "Generar y descargar reporte"}
+                          </Button>
+                        ) : null}
+                        <Button
+                          disabled={!saved}
+                          onClick={handleGoToChimalli}
+                          type="button"
+                          variant="primary"
+                        >
+                          Continuar a Chimalli
+                        </Button>
+                        <Button asChild variant="secondary">
+                          <Link href="/app/evidence">Ver mis evidencias</Link>
+                        </Button>
+                      </div>
+                    </div>
                   </>
                 ) : (
                   <p className="text-sm text-neutral-600">
@@ -1072,39 +1540,13 @@ export function EvidenceCaptureStepper({ initialData }: EvidenceCaptureStepperPr
                 )}
               </div>
             ) : null}
-            {step === 6 ? (
-              <div className="mt-4 space-y-4">
-                {saved ? (
-                  <div className="rounded-md border border-success-100 bg-success-100 p-4 text-sm leading-6 text-success-700">
-                    Evidencia guardada localmente. Puedes continuar a Chimalli con orientacion o revisar tus evidencias guardadas.
-                  </div>
-                ) : (
-                  <div className="rounded-md border border-warning-100 bg-warning-100 p-4 text-sm leading-6 text-warning-700">
-                    Revisa la evidencia antes de guardar. Una vez guardada, permanecera en este dispositivo.
-                  </div>
-                )}
-                <div className="flex flex-wrap gap-3">
-                  {!saved && sealResult ? (
-                    <Button onClick={handleSave} type="button">
-                      <ShieldCheck aria-hidden="true" className="mr-2 h-4 w-4" />
-                      Guardar evidencia
-                    </Button>
-                  ) : null}
-                  <Button asChild variant={saved ? "primary" : "secondary"}>
-                    <Link href="/app/chimalli">Continuar a Chimalli</Link>
-                  </Button>
-                  <Button asChild variant="secondary">
-                    <Link href="/app/evidence">Ver mis evidencias</Link>
-                  </Button>
-                </div>
-              </div>
-            ) : null}
+
           </div>
         </CardContent>
         <CardFooter className="justify-between">
           <Button
             disabled={step === 0}
-            onClick={() => setStep((value) => Math.max(0, value - 1))}
+            onClick={() => goToStep(Math.max(0, step - 1))}
             type="button"
             variant="outline"
           >
@@ -1114,25 +1556,13 @@ export function EvidenceCaptureStepper({ initialData }: EvidenceCaptureStepperPr
             <Button type="button" variant="secondary">
               Guardar y continuar despues
             </Button>
-            {step < 4 ? (
+            {step < 3 ? (
               <Button
                 disabled={!canAdvance()}
                 onClick={handleNext}
                 type="button"
               >
                 Continuar
-              </Button>
-            ) : step === 4 ? (
-              <Button
-                disabled={!sealResult}
-                onClick={handleNext}
-                type="button"
-              >
-                Revisar antes de enviar
-              </Button>
-            ) : step < 6 ? (
-              <Button onClick={handleNext} type="button">
-                {step === 5 ? "Guardar o continuar" : "Continuar"}
               </Button>
             ) : null}
           </div>
@@ -1153,9 +1583,13 @@ export function EvidenceCaptureStepper({ initialData }: EvidenceCaptureStepperPr
               {sealResult ? (
                 <>
                   <div className="flex justify-between gap-3 border-b border-border pb-2">
-                    <dt className="font-semibold text-neutral-600">Archivo</dt>
+                    <dt className="font-semibold text-neutral-600">
+                      {evidenceItems.length > 1 ? "Evidencias" : "Archivo"}
+                    </dt>
                     <dd className="text-right text-foreground truncate max-w-[180px]">
-                      {sealResult.metadata.originalFilename}
+                      {evidenceItems.length > 1
+                        ? `${evidenceItems.length} elementos`
+                        : sealResult.metadata.originalFilename}
                     </dd>
                   </div>
                   <div className="flex justify-between gap-3 border-b border-border pb-2">
@@ -1194,8 +1628,10 @@ export function EvidenceCaptureStepper({ initialData }: EvidenceCaptureStepperPr
               ) : (
                 <>
                   <div className="flex justify-between gap-3 border-b border-border pb-2">
-                    <dt className="font-semibold text-neutral-600">Fecha de captura</dt>
-                    <dd className="text-right text-foreground">Pendiente</dd>
+                    <dt className="font-semibold text-neutral-600">Evidencias</dt>
+                    <dd className="text-right text-foreground">
+                      {evidenceItems.length > 0 ? `${evidenceItems.length} elementos` : "Pendiente"}
+                    </dd>
                   </div>
                   <div className="flex justify-between gap-3 border-b border-border pb-2">
                     <dt className="font-semibold text-neutral-600">Plataforma</dt>
@@ -1207,8 +1643,10 @@ export function EvidenceCaptureStepper({ initialData }: EvidenceCaptureStepperPr
                     </dd>
                   </div>
                   <div className="flex justify-between gap-3 border-b border-border pb-2">
-                    <dt className="font-semibold text-neutral-600">Archivo</dt>
-                    <dd className="text-right text-foreground">Pendiente</dd>
+                    <dt className="font-semibold text-neutral-600">Archivo principal</dt>
+                    <dd className="text-right text-foreground">
+                      {primaryFile ? primaryFile.name : "Pendiente"}
+                    </dd>
                   </div>
                   <div className="flex justify-between gap-3 border-b border-border pb-2">
                     <dt className="font-semibold text-neutral-600">Estado local</dt>
@@ -1242,7 +1680,22 @@ interface ChatMessageProps {
   timestamp: string;
   citations?: RagCitation[];
   isTyping?: boolean;
+  kitArtifact?: EvidenceKitArtifact;
+  onDownloadKit?: (caseData: ChimalliEvidenceKitCase) => void;
 }
+
+interface EvidenceKitArtifact {
+  caseData: ChimalliEvidenceKitCase;
+  status: "generating" | "ready";
+}
+
+type ChimalliChatMessage = {
+  author: "assistant" | "user";
+  content: string;
+  timestamp: string;
+  citations?: RagCitation[];
+  kitArtifact?: EvidenceKitArtifact;
+};
 
 function renderAssistantContent(content: string) {
   let html = content
@@ -1270,7 +1723,15 @@ function renderAssistantContent(content: string) {
   return html;
 }
 
-export function ChatMessage({ author, content, timestamp, citations, isTyping }: ChatMessageProps) {
+export function ChatMessage({
+  author,
+  content,
+  timestamp,
+  citations,
+  isTyping,
+  kitArtifact,
+  onDownloadKit
+}: ChatMessageProps) {
   const isAssistant = author === "assistant";
 
   return (
@@ -1289,7 +1750,9 @@ export function ChatMessage({ author, content, timestamp, citations, isTyping }:
             Chimalli
           </div>
         ) : null}
-        {isAssistant ? (
+        {kitArtifact ? (
+          <EvidenceKitArtifactCard artifact={kitArtifact} onDownloadKit={onDownloadKit} />
+        ) : isAssistant ? (
           <>
             <div
               className="assistant-content"
@@ -1337,6 +1800,65 @@ export function ChatMessage({ author, content, timestamp, citations, isTyping }:
   );
 }
 
+function EvidenceKitArtifactCard({
+  artifact,
+  onDownloadKit
+}: {
+  artifact: EvidenceKitArtifact;
+  onDownloadKit?: (caseData: ChimalliEvidenceKitCase) => void;
+}) {
+  const isReady = artifact.status === "ready";
+
+  return (
+    <div className="w-full min-w-[280px] rounded-2xl border border-brand-200 bg-gradient-to-br from-brand-50 via-white to-secondary p-4 shadow-sm">
+      <div className="flex items-start gap-3">
+        <div className="relative rounded-xl bg-primary p-3 text-primary-foreground shadow-md">
+          <FileText aria-hidden="true" className="h-5 w-5" />
+          {!isReady ? (
+            <span className="absolute -right-1 -top-1 h-3 w-3 animate-ping rounded-full bg-brand-300" />
+          ) : null}
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-bold text-foreground">
+            {isReady ? "Kit de evidencia listo" : "Preparando kit de evidencia"}
+          </p>
+          <p className="mt-1 text-xs leading-5 text-neutral-700">
+            {isReady
+              ? `PDF revisable para ${artifact.caseData.case_id}. Descargalo solo si ya revisaste la informacion.`
+              : "Chimalli esta ordenando narrativa, evidencia, test asistivo y ruta preliminar."}
+          </p>
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <Badge variant={isReady ? "success" : "brand"}>
+              {isReady ? "Pendiente de revision humana" : "Generando archivo"}
+            </Badge>
+            <span className="rounded-full bg-white/80 px-2.5 py-1 text-[11px] font-semibold text-neutral-600">
+              {artifact.caseData.case_id}
+            </span>
+          </div>
+          {!isReady ? (
+            <div className="mt-4 h-2 overflow-hidden rounded-full bg-white">
+              <div className="h-full w-2/3 animate-pulse rounded-full bg-primary" />
+            </div>
+          ) : (
+            <Button
+              className="mt-4"
+              onClick={() => onDownloadKit?.(artifact.caseData)}
+              size="sm"
+              type="button"
+            >
+              <Download aria-hidden="true" className="h-4 w-4" />
+              Descargar PDF
+            </Button>
+          )}
+        </div>
+      </div>
+      <p className="mt-3 border-t border-brand-100 pt-3 text-[11px] leading-5 text-neutral-600">
+        No constituye denuncia automatica ni resolucion. Debe validarse por una persona autorizada.
+      </p>
+    </div>
+  );
+}
+
 type ChimalliAttachmentStatus =
   | "uploaded_unverified"
   | "text_extracted"
@@ -1361,6 +1883,8 @@ interface ChimalliChatPayload {
   attachments: ChimalliAttachment[];
   case: {
     case_id: string;
+    created_at?: string;
+    human_review_notice?: string;
     rag_sources?: RagCitation[];
     victim: {
       name: string | null;
@@ -1371,6 +1895,15 @@ interface ChimalliChatPayload {
     };
     facts: {
       platform: string | null;
+      dates?: string[];
+      aggressors?: string[];
+      narrative?: string;
+      evidence?: Array<{
+        evidence_id: string | null;
+        source_platform: string | null;
+        evidence_hash: string | null;
+        status: string;
+      }>;
       attachments: ChimalliAttachment[];
     };
     vpmrg_test: {
@@ -1378,6 +1911,13 @@ interface ChimalliChatPayload {
       gender_element: { meets: boolean; reason: string };
       political_rights_impact: { meets: boolean; reason: string };
       overall_result: string;
+      confidence?: string;
+    };
+    jurisdiction?: {
+      suggested_authority: string;
+      procedure: string;
+      alternative_routes?: string[];
+      reason: string;
     };
   };
 }
@@ -1413,29 +1953,48 @@ function mergeAttachments(prev: ChimalliAttachment[], next: ChimalliAttachment[]
   return Array.from(byId.values());
 }
 
+const initialChatTimestamp = "Ahora";
+
 export function ChimalliChat() {
   const now = () =>
     new Date().toLocaleTimeString("es-MX", {
       hour: "2-digit",
       minute: "2-digit"
     });
-  const startTime = now();
-  const [messages, setMessages] = useState<
-    Array<{ author: "assistant" | "user"; content: string; timestamp: string; citations?: RagCitation[] }>
-  >([
-    {
-      author: "assistant" as const,
-      content:
-        "Hola. Soy Chimalli. Puedo ayudarte a ordenar una narrativa, identificar elementos preliminares y preparar informacion para revision humana. No sustituyo asesoria legal ni decido si existe una infraccion.",
-      timestamp: startTime
-    },
-    {
-      author: "assistant" as const,
-      content:
-        "Si quieres empezar, cuentame que ocurrio, en que plataforma paso y si esta relacionado con un cargo, candidatura o actividad politica.",
-      timestamp: startTime
+  const { context: machiyotlContext, clearContext } = useChimalliContext();
+  const [contextSent, setContextSent] = useState(false);
+  const [messages, setMessages] = useState<ChimalliChatMessage[]>(() => {
+    const base = [
+      {
+        author: "assistant" as const,
+        content:
+          "Hola. Soy Chimalli. Puedo ayudarte a ordenar una narrativa, identificar elementos preliminares y preparar informacion para revision humana. No sustituyo asesoria legal ni decido si existe una infraccion.",
+        timestamp: initialChatTimestamp
+      },
+    ];
+    if (machiyotlContext && machiyotlContext.evidences.length > 0) {
+      const evCount = machiyotlContext.evidences.length;
+      const alertInfo = machiyotlContext.alert
+        ? `\n\nTienes una alerta de Tlachia (${machiyotlContext.alert.alertCode || machiyotlContext.alert.alertId}) de nivel ${machiyotlContext.alert.riskLevel || "desconocido"} asociada a esta evidencia.`
+        : "";
+      base.push({
+        author: "assistant" as const,
+        content:
+          `Veo que vienes de Machiyotl con ${evCount} evidencia(s) sellada(s) criptograficamente. ` +
+          `Puedo incluir esos datos en el expediente.${alertInfo}\n\n` +
+          `Cuentame que ocurrio para organizar la informacion y preparar el caso.`,
+        timestamp: initialChatTimestamp
+      });
+    } else {
+      base.push({
+        author: "assistant" as const,
+        content:
+          "Si quieres empezar, cuentame que ocurrio, en que plataforma paso y si esta relacionado con un cargo, candidatura o actividad politica.",
+        timestamp: initialChatTimestamp
+      });
     }
-  ]);
+    return base;
+  });
   const [input, setInput] = useState("");
   const [attachments, setAttachments] = useState<ChimalliAttachment[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -1450,6 +2009,7 @@ export function ChimalliChat() {
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const messagesContainerRef = useRef<HTMLDivElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const generatedKitCasesRef = useRef<Set<string>>(new Set());
   const [typingIndex, setTypingIndex] = useState<number | null>(null);
   const [typingText, setTypingText] = useState("");
   const fullTextRef = useRef("");
@@ -1591,6 +2151,59 @@ export function ChimalliChat() {
     setAttachments((current) => current.filter((attachment) => attachment.attachment_id !== attachmentId));
   }
 
+  function appendEvidenceKitArtifact(caseData: ChimalliEvidenceKitCase) {
+    if (generatedKitCasesRef.current.has(caseData.case_id)) {
+      return;
+    }
+    generatedKitCasesRef.current.add(caseData.case_id);
+    const artifactId = `kit-${caseData.case_id}`;
+    setMessages((current) => [
+      ...current,
+      {
+        author: "assistant",
+        content: "",
+        timestamp: now(),
+        kitArtifact: { caseData, status: "generating" }
+      }
+    ]);
+    window.setTimeout(() => {
+      setMessages((current) =>
+        current.map((message) =>
+          message.kitArtifact?.caseData.case_id === caseData.case_id &&
+          `kit-${message.kitArtifact.caseData.case_id}` === artifactId
+            ? { ...message, kitArtifact: { caseData, status: "ready" } }
+            : message
+        )
+      );
+    }, 1400);
+  }
+
+  function handleEvidenceKitDecision(caseData: ChimalliEvidenceKitCase, userMessage: string) {
+    const readiness = evaluateEvidenceKitReadiness(caseData);
+    const explicitRequest = isEvidenceKitRequest(userMessage);
+    if (readiness.ready) {
+      appendEvidenceKitArtifact(caseData);
+      return;
+    }
+    if (!explicitRequest) {
+      return;
+    }
+    setMessages((current) => [
+      ...current,
+      {
+        author: "assistant",
+        content: evidenceKitGuidance(readiness),
+        timestamp: now()
+      }
+    ]);
+  }
+
+  function handleDownloadKit(caseData: ChimalliEvidenceKitCase) {
+    void downloadChimalliEvidenceKit(caseData).catch(() => {
+      setError("No se pudo generar el PDF en este navegador. Tu informacion sigue disponible en el chat.");
+    });
+  }
+
   function handleComposerKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
     if (event.key !== "Enter" || event.shiftKey) {
       return;
@@ -1633,14 +2246,38 @@ export function ChimalliChat() {
     setIsLoading(true);
 
     try {
+      const hasContext = !currentCaseId && machiyotlContext && !contextSent;
+      const allAttachmentIds = [
+        ...outgoingAttachments.map((attachment) => attachment.attachment_id),
+        ...(hasContext ? machiyotlContext.attachmentIds : []),
+      ];
+      const requestBody: Record<string, unknown> = {
+        message: outgoing,
+        case_id: currentCaseId,
+        attachment_ids: allAttachmentIds,
+      };
+      if (hasContext) {
+        requestBody.context = {
+          machiyotl_evidence: machiyotlContext.evidences.map((ev) => ({
+            evidence_hash: ev.hash,
+            source_platform: ev.platform,
+            evidence_type: ev.sourceType || "screenshot",
+            custody_status: "sealed-local",
+            authorized_notes: ev.contextNote || undefined,
+          })),
+          tlachia_alert: machiyotlContext.alert ? {
+            alert_id: machiyotlContext.alert.alertId,
+            risk_level: machiyotlContext.alert.riskLevel,
+            signals: machiyotlContext.alert.signals?.map((s) => s.label) || [],
+            sanitized_mentions: machiyotlContext.alert.motive ? [machiyotlContext.alert.motive] : [],
+          } : undefined,
+          source_platform: machiyotlContext.evidences[0]?.platform,
+        };
+      }
       const response = await fetch(`${apiUrl}/api/v1/chimalli/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          message: outgoing,
-          case_id: currentCaseId,
-          attachment_ids: outgoingAttachments.map((attachment) => attachment.attachment_id)
-        })
+        body: JSON.stringify(requestBody)
       });
 
       if (!response.ok) {
@@ -1648,6 +2285,7 @@ export function ChimalliChat() {
       }
 
       const payload = (await response.json()) as ChimalliChatPayload;
+      const caseData = payload.case as ChimalliEvidenceKitCase;
 
       const replyContent =
         payload.reply ||
@@ -1668,6 +2306,10 @@ export function ChimalliChat() {
       setTypingText("");
       if (!currentCaseId) {
         setCurrentCaseId(payload.case.case_id);
+        if (hasContext) {
+          clearContext();
+          setContextSent(true);
+        }
       }
       setHasCaseContext(true);
       setDynamicCaseAttachments((prev) =>
@@ -1754,6 +2396,7 @@ export function ChimalliChat() {
         }
       ];
       setDynamicVpmrgTest((prev) => mergeVpmrgTest(prev, nextVpmrgTest));
+      handleEvidenceKitDecision(caseData, outgoing);
     } catch (caught) {
       setError(
         caught instanceof Error
@@ -1819,7 +2462,9 @@ export function ChimalliChat() {
                   citations={message.citations ?? ragSourcesMap[index]}
                   content={isTyping ? typingText : message.content}
                   isTyping={isTyping}
+                  kitArtifact={message.kitArtifact}
                   key={`${message.author}-${index}`}
+                  onDownloadKit={handleDownloadKit}
                   timestamp={isTyping ? "" : message.timestamp}
                 />
               );

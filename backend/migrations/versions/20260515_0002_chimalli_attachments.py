@@ -1,7 +1,7 @@
 from alembic import op
 
 
-revision = "20260515_0002_chimalli_attachments"
+revision = "20260515_0002_chimalli"
 down_revision = "20260515_0001"
 branch_labels = None
 depends_on = None

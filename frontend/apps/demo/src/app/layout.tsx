@@ -8,6 +8,7 @@ export const metadata: Metadata = {
   description: "Interfaz demo mock de Yaocíhuatl para hackathón institucional.",
   manifest: "/manifest.json",
   icons: [
+    { rel: "icon", url: "/yaocihuatl-logo-nb.ico", sizes: "256x256" },
     { rel: "icon", url: "/icon-192.png", sizes: "192x192" },
     { rel: "apple-touch-icon", url: "/icon-192.png", sizes: "192x192" }
   ]

@@ -1,14 +1,11 @@
-const CACHE_NAME = "machiyotl-v1";
+const CACHE_NAME = "machiyotl-static-v3";
 const STATIC_ASSETS = [
-  "/",
-  "/app/machiyotl",
-  "/app/machiyotl/capture",
-  "/app/machiyotl/alerts",
-  "/app/evidence",
-  "/verify",
-  "/safe-exit",
+  "/favicon.ico",
+  "/yaocihuatl-logo-nb.ico",
   "/icon-192.png",
-  "/icon-512.png"
+  "/icon-512.png",
+  "/manifest.json",
+  "/yaocihuatl-logo-nb.png"
 ];
 
 self.addEventListener("install", (event) => {
@@ -37,7 +34,10 @@ self.addEventListener("activate", (event) => {
 
 self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") return;
-  if (event.request.url.startsWith("http://localhost:8000")) return;
+
+  const url = new URL(event.request.url);
+  if (url.origin !== self.location.origin) return;
+  if (!STATIC_ASSETS.includes(url.pathname)) return;
 
   event.respondWith(
     caches.match(event.request).then((cached) => {
