@@ -1050,15 +1050,7 @@ export function ChimalliChat() {
       author: "assistant" as const,
       content:
         "Hola. Soy Chimalli. Puedo ayudarte a ordenar una narrativa, identificar elementos preliminares y preparar informacion para revision humana. No sustituyo asesoria legal ni decido si existe una infraccion.",
-      timestamp: startTime,
-      citations: [
-        {
-          source_file: "LGAMVLV.md",
-          excerpt: "Art. 20 Bis — La violencia politica contra las mujeres en razon de genero es toda accion u omision...",
-          institution: "INE",
-          page: 4
-        }
-      ]
+      timestamp: startTime
     },
     {
       author: "assistant" as const,
@@ -1270,14 +1262,7 @@ export function ChimalliChat() {
         body: JSON.stringify({
           message: outgoing,
           case_id: currentCaseId,
-          attachment_ids: outgoingAttachments.map((attachment) => attachment.attachment_id),
-          integration: {
-            tlachia_alert_id: "demo-alert-001",
-            source_platform: "Plataforma demo A",
-            risk_level: "high",
-            machiyotl_evidence_hashes: [evidences[0]?.hash ?? "sha256:demo"],
-            evidence_status: "sealed_local"
-          }
+          attachment_ids: outgoingAttachments.map((attachment) => attachment.attachment_id)
         })
       });
 

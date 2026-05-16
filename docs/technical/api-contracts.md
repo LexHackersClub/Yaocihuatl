@@ -89,23 +89,75 @@ Base path: `/api/v1/chimalli`
 
 Chimalli es asistencia preliminar. Ningun endpoint presenta denuncias automaticamente, confirma VPMRG ni sustituye asesoria legal o resolucion de autoridad.
 
-### `POST /chat`
+### `POST /cases`
 
 Estado: implementado.
+
+Crea un caso Chimalli directamente desde la experiencia de la persona protegida.
 
 Entrada:
 
 ```json
 {
-  "message": "Narrativa sintetica o autorizada",
+  "narrative": "Narrativa autorizada",
+  "victim": {
+    "name": null,
+    "role": null,
+    "position": null,
+    "state": null,
+    "municipality": null
+  },
+  "context": {
+    "core_case": {
+      "core_case_id": null,
+      "case_code": null,
+      "data_classification": "restricted_sensitive"
+    },
+    "tlachia_alert": null,
+    "machiyotl_evidence": [
+      {
+        "evidence_id": null,
+        "evidence_hash": "sha256:...",
+        "source_platform": "X",
+        "custody_status": "sealed_local",
+        "evidence_type": "screenshot",
+        "authorized_notes": null
+      }
+    ],
+    "source_platform": "X"
+  },
+  "attachments": []
+}
+```
+
+Salida: caso Chimalli estructurado con estado `intake_pending_review`.
+
+### `POST /chat`
+
+Estado: implementado.
+
+Continua o inicia una conversacion sobre un caso Chimalli.
+
+Entrada:
+
+```json
+{
+  "message": "Narrativa autorizada",
   "case_id": null,
-  "integration": {
-    "tlachia_alert_id": "mock-alert-001",
-    "source_platform": "X",
-    "risk_level": "high",
-    "machiyotl_evidence_hashes": ["sha256:mocked-evidence-hash"],
-    "evidence_status": "sealed_mock"
-  }
+  "context": {
+    "machiyotl_evidence": [
+      {
+        "evidence_id": null,
+        "evidence_hash": "sha256:...",
+        "source_platform": "X",
+        "custody_status": "sealed_local",
+        "evidence_type": "screenshot",
+        "authorized_notes": null
+      }
+    ],
+    "source_platform": "X"
+  },
+  "attachment_ids": []
 }
 ```
 

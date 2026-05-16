@@ -100,6 +100,7 @@ Asistencia legal/RAG.
 | Tabla | Uso |
 |---|---|
 | `cases` | Caso Chimalli vinculado opcionalmente a `core.cases`. |
+| `attachments` | Archivos adjuntos asistivos con hash SHA-256, texto extraido y analisis visual. |
 | `messages` | Mensajes del flujo conversacional. |
 | `extractions` | Entidades o estructuras extraidas, editables. |
 | `vpmrg_tests` | Resultado asistivo del test de tres elementos. |
@@ -108,7 +109,7 @@ Asistencia legal/RAG.
 | `case_rag_sources` | Fuentes asociadas a un caso y ranking. |
 | `llm_interaction_logs` | Metadata minimizada de interacciones LLM. |
 
-Nota: el servicio MVP aun genera algunos casos en memoria de proceso. Estas tablas son la ruta de persistencia durable.
+Nota: los casos Chimalli se persisten en PostgreSQL. Los adjuntos asistivos se almacenan en `chimalli.attachments` con hash SHA-256 para trazabilidad. La evidencia forense formal sigue siendo responsabilidad de Machiyotl.
 
 Reglas:
 

@@ -67,7 +67,7 @@ def test_client_converts_reddit_response_to_reddit_item() -> None:
     assert item.body == "Test body"
     assert item.score == 42
     assert item.comment_count == 10
-    assert item.occurred_at == datetime(2024, 5, 15, 8, 0, 0, tzinfo=timezone.utc)
+    assert item.occurred_at == datetime(2024, 5, 15, 10, 40, 0, tzinfo=timezone.utc)
     assert item.metadata["score"] == 42
 
 

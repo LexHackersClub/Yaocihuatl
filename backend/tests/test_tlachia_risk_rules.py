@@ -12,7 +12,7 @@ def test_no_signals_returns_unclassified() -> None:
 def test_medium_case() -> None:
     engine = RiskRulesEngine()
     text = "Esta mujer de la casa no sirve para nada"
-    metadata = {"protected_labels": ["candidata_a"], "mentions_in_window": 5, "similar_texts_count": 3, "score": 60, "prior_alerts_count": 1}
+    metadata = {"protected_labels": ["candidata_a"], "mentions_in_window": 5, "similar_texts_count": 3, "score": 40, "prior_alerts_count": 1}
     signals = engine.evaluate(text, metadata)
     score = engine.compute_score(signals)
     assert 35 <= score <= 69

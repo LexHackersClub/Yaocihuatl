@@ -373,6 +373,26 @@ class ChimalliPersistentCase(Base):
     updated_at: Mapped[datetime] = utc_created_at()
 
 
+class ChimalliAttachment(Base):
+    __tablename__ = "attachments"
+    __table_args__ = {"schema": "chimalli"}
+
+    id: Mapped[UUID] = uuid_pk()
+    chimalli_case_id: Mapped[UUID | None] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("chimalli.cases.id", ondelete="CASCADE"))
+    attachment_code: Mapped[str] = mapped_column(String(40), unique=True, nullable=False)
+    file_name: Mapped[str] = mapped_column(String(240), nullable=False)
+    mime_type: Mapped[str] = mapped_column(String(120), nullable=False)
+    size_bytes: Mapped[int] = mapped_column(Integer, nullable=False)
+    sha256_hash: Mapped[str] = mapped_column(String(128), nullable=False)
+    local_file_path: Mapped[str | None] = mapped_column(Text)
+    extracted_text: Mapped[str | None] = mapped_column(Text)
+    visual_summary: Mapped[str | None] = mapped_column(Text)
+    visual_analysis_json: Mapped[dict] = mapped_column("metadata", JSONB, nullable=False, default=dict, server_default=text("'{}'::jsonb"))
+    status: Mapped[str] = mapped_column(String(40), nullable=False, default="uploaded_unverified")
+    warning: Mapped[str] = mapped_column(Text, nullable=False, default="Adjunto no verificado; requiere revision humana.")
+    created_at: Mapped[datetime] = utc_created_at()
+
+
 class ChimalliMessage(Base):
     __tablename__ = "messages"
     __table_args__ = {"schema": "chimalli"}

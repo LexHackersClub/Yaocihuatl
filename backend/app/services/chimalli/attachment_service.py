@@ -19,8 +19,17 @@ ALLOWED_MIME_TYPES = {
     "image/png": ".png",
     "image/webp": ".webp",
     "text/plain": ".txt",
+    "text/markdown": ".md",
 }
-ALLOWED_EXTENSIONS = {".jpeg": "image/jpeg", ".jpg": "image/jpeg", ".pdf": "application/pdf", ".png": "image/png", ".txt": "text/plain", ".webp": "image/webp"}
+ALLOWED_EXTENSIONS = {
+    ".jpeg": "image/jpeg",
+    ".jpg": "image/jpeg",
+    ".pdf": "application/pdf",
+    ".png": "image/png",
+    ".txt": "text/plain",
+    ".md": "text/markdown",
+    ".webp": "image/webp",
+}
 
 
 class AttachmentValidationError(ValueError):
@@ -95,6 +104,11 @@ class AttachmentService:
 
     def _enrich_attachment(self, attachment: AttachmentReference, file_path: Path) -> AttachmentReference:
         if attachment.mime_type == "text/plain":
+            text = normalize_text(file_path.read_text(encoding="utf-8", errors="ignore"))
+            attachment.extracted_text = text[: self.settings.chimalli_max_extracted_text_chars]
+            attachment.status = "text_extracted" if attachment.extracted_text else "metadata_only"
+            return attachment
+        if attachment.mime_type == "text/markdown":
             text = normalize_text(file_path.read_text(encoding="utf-8", errors="ignore"))
             attachment.extracted_text = text[: self.settings.chimalli_max_extracted_text_chars]
             attachment.status = "text_extracted" if attachment.extracted_text else "metadata_only"
