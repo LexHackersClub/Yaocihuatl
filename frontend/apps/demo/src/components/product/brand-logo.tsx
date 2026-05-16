@@ -15,7 +15,7 @@ export function BrandLogo({ href = "/", subtitle, compact = false }: BrandLogoPr
           alt="Logo de Yaocíhuatl, perfil minimalista de mujer guerrera"
           className="h-10 w-10 object-contain"
           height={40}
-          src="/icon-192.png"
+          src="/yaocihuatl-logo-nb.png"
           width={40}
         />
       </span>
