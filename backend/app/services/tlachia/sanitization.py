@@ -53,7 +53,7 @@ class SanitizationService:
     @staticmethod
     def _remove_handles(text: str) -> str:
         # Remover u/username básico; no es perfecto pero es explicable y revisable.
-        return re.sub(r"\b/?u/\w+", "[USUARIO]", text)
+        return re.sub(r"(?:\b|^)\/?u/\w+", "[USUARIO]", text)
 
     @staticmethod
     def _hash_author(author_name: str) -> str:

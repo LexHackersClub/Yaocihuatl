@@ -25,6 +25,13 @@ import {
 } from "@/components/ui/card";
 import { dismissAlert, escalateAlert, fetchAlerts, reviewAlert, type TlachiaAlert } from "@/lib/tlachia-api";
 import { explainabilitySignals, riskClusters } from "@/lib/mock-data";
+import type { RiskLevel } from "@/lib/types";
+
+function toRiskLevel(level: string): RiskLevel {
+  if (level === "unclassified") return "unknown";
+  if (level === "low" || level === "medium" || level === "high") return level;
+  return "unknown";
+}
 
 export default function TlachiaPage() {
   const [alerts, setAlerts] = useState<TlachiaAlert[]>([]);
@@ -251,7 +258,7 @@ export default function TlachiaPage() {
                           </td>
                           <td className="px-4 py-3 text-neutral-700">{alert.platform}</td>
                           <td className="px-4 py-3">
-                            <RiskBadge level={alert.risk_level as any} />
+                            <RiskBadge level={toRiskLevel(alert.risk_level)} />
                           </td>
                           <td className="px-4 py-3 text-neutral-700">{alert.motive.slice(0, 80)}</td>
                           <td className="px-4 py-3">
