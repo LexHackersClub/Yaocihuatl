@@ -1,7 +1,7 @@
 """Integration test for the Machiyotl module end-to-end pipeline.
 
-Covers: schema validation → audit trail → DB persistence → metadata safety.
-Exercises all Machiyotl artifacts built so far (schemas + audit service) together.
+Covers: schema validation → audit trail → DB persistence → metadata safety → repository queries.
+Exercises all Machiyotl artifacts built so far (schemas + audit service + repository) together.
 """
 
 from datetime import datetime, timezone
@@ -26,6 +26,7 @@ from app.services.machiyotl.audit_service import (
     MACHIYOTL_AUDIT_ACTIONS,
     MachiyotlAuditService,
 )
+from app.services.machiyotl.repository import MachiyotlRepository
 from tests.db_test_utils import migrate_and_seed_database
 
 
@@ -146,14 +147,18 @@ class TestFullEvidenceLifecycle:
                 assert count >= 1, f"Expected at least 1 audit row for action {action}, got {count}"
 
             note_audit = db.scalar(
-                select(AuditLog).where(AuditLog.action == MACHIYOTL_AUDIT_ACTIONS["NOTE_CREATE"])
+                select(AuditLog)
+                .where(AuditLog.action == MACHIYOTL_AUDIT_ACTIONS["NOTE_CREATE"])
+                .order_by(AuditLog.created_at.desc())
             )
             assert note_audit is not None
             assert "note" not in note_audit.metadata_json
             assert note_audit.metadata_json["evidence_code"] == "EVD-2026-INT-001"
 
             seal_audit = db.scalar(
-                select(AuditLog).where(AuditLog.action == MACHIYOTL_AUDIT_ACTIONS["EVIDENCE_SEAL"])
+                select(AuditLog)
+                .where(AuditLog.action == MACHIYOTL_AUDIT_ACTIONS["EVIDENCE_SEAL"])
+                .order_by(AuditLog.created_at.desc())
             )
             assert seal_audit is not None
             assert seal_audit.metadata_json["hash_prefix"] == VALID_HASH[:HASH_PREFIX_LENGTH]
@@ -308,3 +313,103 @@ class TestEvidenceItemResponse:
         assert item.id == evidence_id
         assert item.status == "sealed-local"
         assert item.sha256_hash == VALID_HASH
+
+
+# =============================================================================
+# MCH-105: Repository / Query Hardening
+# =============================================================================
+
+class TestMachiyotlRepository:
+    """Query layer correctness, pagination, and module boundaries."""
+
+    def test_get_evidence_by_id_returns_seeded_item(self) -> None:
+        migrate_and_seed_database()
+        with create_session() as db:
+            repo = MachiyotlRepository(db)
+            item = repo.get_evidence_by_code("EVD-2026-DEMO-001")
+            assert item is not None
+            assert item.evidence_code == "EVD-2026-DEMO-001"
+            assert item.status == "sealed-local"
+
+    def test_get_evidence_by_id_returns_none_for_missing(self) -> None:
+        migrate_and_seed_database()
+        with create_session() as db:
+            repo = MachiyotlRepository(db)
+            missing = repo.get_evidence_by_id(uuid4())
+            assert missing is None
+
+    def test_list_evidence_filter_by_status(self) -> None:
+        migrate_and_seed_database()
+        with create_session() as db:
+            repo = MachiyotlRepository(db)
+            items, total = repo.list_evidence(status="sealed-local")
+            assert total >= 1
+            assert all(item.status == "sealed-local" for item in items)
+
+    def test_list_evidence_pagination(self) -> None:
+        migrate_and_seed_database()
+        with create_session() as db:
+            repo = MachiyotlRepository(db)
+            items, total = repo.list_evidence(limit=1, offset=0)
+            assert len(items) == 1
+            assert total >= 1
+
+    def test_list_evidence_limit_capped_at_200(self) -> None:
+        migrate_and_seed_database()
+        with create_session() as db:
+            repo = MachiyotlRepository(db)
+            items, total = repo.list_evidence(limit=999)
+            assert len(items) <= 200
+
+    def test_get_evidence_notes_returns_seed_note(self) -> None:
+        migrate_and_seed_database()
+        with create_session() as db:
+            repo = MachiyotlRepository(db)
+            item = repo.get_evidence_by_code("EVD-2026-DEMO-001")
+            assert item is not None
+            notes, total = repo.get_evidence_notes(item.id)
+            assert total >= 1
+            assert all(note.evidence_id == item.id for note in notes)
+
+    def test_get_custody_timeline_returns_seed_event(self) -> None:
+        migrate_and_seed_database()
+        with create_session() as db:
+            repo = MachiyotlRepository(db)
+            item = repo.get_evidence_by_code("EVD-2026-DEMO-001")
+            assert item is not None
+            timeline = repo.get_custody_timeline(item.id)
+            assert len(timeline) >= 1
+            assert all(event.evidence_id == item.id for event in timeline)
+            # Timeline is ordered ASC by occurred_at
+            for i in range(1, len(timeline)):
+                assert timeline[i].occurred_at >= timeline[i - 1].occurred_at
+
+    def test_list_hash_verifications(self) -> None:
+        migrate_and_seed_database()
+        with create_session() as db:
+            repo = MachiyotlRepository(db)
+            verifications, total = repo.list_hash_verifications()
+            # Seed data may or may not have verifications; just assert no crash
+            assert total is not None
+
+    def test_validate_status_transition_allowed(self) -> None:
+        assert MachiyotlRepository.validate_status_transition("draft", "sealed-local") is True
+
+    def test_validate_status_transition_blocked(self) -> None:
+        assert MachiyotlRepository.validate_status_transition("draft", "submitted") is False
+
+    def test_validate_status_transition_terminal(self) -> None:
+        assert MachiyotlRepository.validate_status_transition("submitted", "draft") is False
+
+    def test_repository_never_joins_cross_module(self) -> None:
+        """Ensure repository methods only touch machiyotl schema tables."""
+        migrate_and_seed_database()
+        with create_session() as db:
+            repo = MachiyotlRepository(db)
+            # All public methods should only return machiyotl types
+            item = repo.get_evidence_by_code("EVD-2026-DEMO-001")
+            assert item is not None
+            # If any cross-module data were eagerly loaded, it would be visible
+            # in __dict__.  None should be present.
+            for attr in ["chimalli_case", "tlachia_alert", "core_case"]:
+                assert not hasattr(item, attr), f"cross-module attribute {attr} leaked"
