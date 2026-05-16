@@ -714,6 +714,37 @@ interface EvidenceCaptureStepperProps {
   };
 }
 
+interface EvidenceItem {
+  id: string;
+  type: "screenshot" | "url" | "note";
+  content: File | string;
+  label: string;
+  size?: number;
+  addedAt: string;
+}
+
+function generateItemId(): string {
+  return `ei-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+}
+
+function formatItemSize(bytes?: number): string {
+  if (!bytes) return "";
+  if (bytes === 0) return "0 B";
+  const k = 1024;
+  const sizes = ["B", "KB", "MB"];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`;
+}
+
+function getEvidenceIcon(type: EvidenceItem["type"]) {
+  switch (type) {
+    case "screenshot": return FileLock2;
+    case "url": return Route;
+    case "note": return Paperclip;
+    default: return FileLock2;
+  }
+}
+
 export function EvidenceCaptureStepper({ initialData }: EvidenceCaptureStepperProps) {
   const { sealFile, sealing, error: sealError } = useLocalSeal();
   const { saveEvidence, listEvidences } = useEvidenceStore();
@@ -722,19 +753,32 @@ export function EvidenceCaptureStepper({ initialData }: EvidenceCaptureStepperPr
   const isAlertMode = initialData?.mode === "alert" && !!initialData?.alertId;
 
   const [step, setStep] = useState(0);
-  const [file, setFile] = useState<File | null>(null);
+  const [evidenceItems, setEvidenceItems] = useState<EvidenceItem[]>([]);
   const [sealResult, setSealResult] = useState<SealResult | null>(null);
-  const [sourceType, setSourceType] = useState<string>("");
-  const [url, setUrl] = useState(initialData?.sourceUrl || "");
+  const [urlInput, setUrlInput] = useState(initialData?.sourceUrl || "");
+  const [noteInput, setNoteInput] = useState("");
+  const [urlError, setUrlError] = useState("");
   const [contextNote, setContextNote] = useState("");
   const [platform, setPlatform] = useState(initialData?.platform || "Plataforma de origen");
   const [saved, setSaved] = useState(false);
 
+  // Pre-fill URL from alert if provided
+  useEffect(() => {
+    if (initialData?.sourceUrl && !urlInput) {
+      setUrlInput(initialData.sourceUrl);
+    }
+  }, [initialData?.sourceUrl]);
+
+  const primaryFile = useMemo(() => {
+    const screenshot = evidenceItems.find((item) => item.type === "screenshot");
+    return screenshot?.content instanceof File ? screenshot.content : null;
+  }, [evidenceItems]);
+
   const realCustodyEvents = useMemo(() => {
     if (!sealResult) return undefined;
     const captured = sealResult.capturedAt;
-    const sealed = new Date(new Date(captured).getTime() + 120000).toISOString(); // +2 min
-    const reviewed = new Date(new Date(captured).getTime() + 240000).toISOString(); // +4 min
+    const sealed = new Date(new Date(captured).getTime() + 120000).toISOString();
+    const reviewed = new Date(new Date(captured).getTime() + 240000).toISOString();
     return [
       {
         title: "Captura iniciada",
@@ -767,46 +811,100 @@ export function EvidenceCaptureStepper({ initialData }: EvidenceCaptureStepperPr
 
   const steps = [
     "Inicio",
-    "Fuente",
-    "Archivo/enlace",
-    "Contexto opcional",
-    "Sello local",
+    "Agregar evidencias",
+    "Contexto",
+    "Sello",
     "Revision",
     "Guardar o continuar"
   ];
 
-  const sourceTypes = [
-    { id: "publicacion", label: "Publicacion publica", icon: FileLock2 },
-    { id: "imagen-local", label: "Imagen local", icon: FileLock2 },
-    { id: "url", label: "URL", icon: FileLock2 },
-    { id: "nota", label: "Nota contextual", icon: FileLock2 },
-  ];
-
+  // ─── Evidence item handlers ───
   const handleFileChange = useCallback(
     (e: ChangeEvent<HTMLInputElement>) => {
-      const selected = e.target.files?.[0];
-      if (selected) {
-        setFile(selected);
-        setSourceType("imagen-local");
-        setPlatform(
-          selected.name.includes("twitter") || selected.name.includes("x-")
-            ? "X"
-            : selected.name.includes("fb") || selected.name.includes("face")
-              ? "Facebook"
-              : "Plataforma de origen"
-        );
+      const files = e.target.files;
+      if (!files) return;
+      const newItems: EvidenceItem[] = Array.from(files).map((file) => ({
+        id: generateItemId(),
+        type: "screenshot" as const,
+        content: file,
+        label: file.name,
+        size: file.size,
+        addedAt: new Date().toISOString(),
+      }));
+      setEvidenceItems((prev) => [...prev, ...newItems]);
+      // Infer platform from first filename if not already set
+      if (platform === "Plataforma de origen" && files[0]) {
+        const name = files[0].name.toLowerCase();
+        if (name.includes("twitter") || name.includes("x_") || name.includes("x-")) {
+          setPlatform("X");
+        } else if (name.includes("fb") || name.includes("face")) {
+          setPlatform("Facebook");
+        } else if (name.includes("insta")) {
+          setPlatform("Instagram");
+        } else if (name.includes("tiktok")) {
+          setPlatform("TikTok");
+        } else if (name.includes("whats") || name.includes("wa-")) {
+          setPlatform("WhatsApp");
+        }
       }
     },
-    []
+    [platform]
   );
 
+  const handleAddUrl = useCallback(() => {
+    if (!urlInput.trim()) return;
+    let url = urlInput.trim();
+    if (!url.startsWith("http://") && !url.startsWith("https://")) {
+      url = "https://" + url;
+    }
+    try {
+      new URL(url);
+    } catch {
+      setUrlError("Por favor ingresa una URL valida (ej. https://x.com/usuario/status/123)");
+      return;
+    }
+    setEvidenceItems((prev) => [
+      ...prev,
+      {
+        id: generateItemId(),
+        type: "url" as const,
+        content: url,
+        label: url,
+        addedAt: new Date().toISOString(),
+      },
+    ]);
+    setUrlInput("");
+    setUrlError("");
+  }, [urlInput]);
+
+  const handleAddNote = useCallback(() => {
+    const trimmed = noteInput.trim();
+    if (!trimmed) return;
+    setEvidenceItems((prev) => [
+      ...prev,
+      {
+        id: generateItemId(),
+        type: "note" as const,
+        content: trimmed,
+        label: trimmed.length > 60 ? trimmed.slice(0, 60) + "…" : trimmed,
+        addedAt: new Date().toISOString(),
+      },
+    ]);
+    setNoteInput("");
+  }, [noteInput]);
+
+  const handleRemoveItem = useCallback((id: string) => {
+    setEvidenceItems((prev) => prev.filter((item) => item.id !== id));
+  }, []);
+
+  // ─── Seal / Save / PDF ───
   const handleSeal = useCallback(async () => {
-    if (!file) return;
-    const result = await sealFile(file);
+    if (!primaryFile) return;
+    const result = await sealFile(primaryFile);
     if (result) {
       setSealResult(result);
     }
-  }, [file, sealFile]);
+  }, [primaryFile, sealFile]);
 
   const handleSave = useCallback(() => {
     if (!sealResult) return;
@@ -814,7 +912,7 @@ export function EvidenceCaptureStepper({ initialData }: EvidenceCaptureStepperPr
       hash: sealResult.hash,
       shortHash: sealResult.shortHash,
       capturedAt: sealResult.capturedAt,
-      sourceType: sourceType || "imagen-local",
+      sourceType: "multi-evidencia",
       platform,
       originalFilename: sealResult.metadata.originalFilename,
       mimeType: sealResult.metadata.mimeType,
@@ -823,10 +921,10 @@ export function EvidenceCaptureStepper({ initialData }: EvidenceCaptureStepperPr
       status: "sellada-localmente",
       alertId: initialData?.alertId,
       mode: initialData?.mode || "manual",
-      sourceUrl: url,
+      sourceUrl: urlInput,
     });
     setSaved(true);
-  }, [sealResult, sourceType, platform, contextNote, saveEvidence, initialData, url]);
+  }, [sealResult, platform, contextNote, saveEvidence, initialData, urlInput]);
 
   const handleGeneratePDF = useCallback(async () => {
     if (!sealResult) return;
@@ -835,7 +933,7 @@ export function EvidenceCaptureStepper({ initialData }: EvidenceCaptureStepperPr
       hash: sealResult.hash,
       shortHash: sealResult.shortHash,
       capturedAt: sealResult.capturedAt,
-      sourceType: sourceType || "imagen-local",
+      sourceType: "multi-evidencia",
       platform,
       originalFilename: sealResult.metadata.originalFilename,
       mimeType: sealResult.metadata.mimeType,
@@ -845,32 +943,22 @@ export function EvidenceCaptureStepper({ initialData }: EvidenceCaptureStepperPr
       createdAt: new Date().toISOString(),
       alertId: initialData?.alertId,
       mode: initialData?.mode || "manual",
-      sourceUrl: url,
+      sourceUrl: urlInput,
     };
     await generatePDF(evidenceData);
-  }, [sealResult, sourceType, platform, contextNote, initialData, url, generatePDF]);
-
-  const handleSelectSource = useCallback((typeId: string) => {
-    setSourceType(typeId);
-    if (typeId === "imagen-local") {
-      document.getElementById("evidence-file-input")?.click();
-    } else {
-      setStep((v) => Math.min(steps.length - 1, v + 1));
-    }
-  }, []);
+  }, [sealResult, platform, contextNote, initialData, urlInput, generatePDF]);
 
   function canAdvance(): boolean {
-    if (step === 1 && !sourceType) return false;
-    if (step === 2 && sourceType === "imagen-local" && !file) return false;
-    if (step === 4 && !sealResult) return false;
+    if (step === 1 && evidenceItems.length === 0) return false;
+    if (step === 3 && !sealResult) return false;
     return true;
   }
 
   function handleNext() {
-    if (step === 3 && !sealResult && file) {
+    if (step === 2 && !sealResult && primaryFile) {
       handleSeal();
     }
-    if (step === 3 && !sealResult && !file) {
+    if (step === 2 && !sealResult && !primaryFile) {
       setStep((v) => Math.min(steps.length - 1, v + 1));
     }
     setStep((v) => Math.min(steps.length - 1, v + 1));
@@ -941,92 +1029,143 @@ export function EvidenceCaptureStepper({ initialData }: EvidenceCaptureStepperPr
               </div>
             ) : null}
             {step === 1 ? (
-              <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                {sourceTypes.map((item) => (
+              <div className="mt-4 space-y-6">
+                {/* File upload */}
+                <div className="rounded-lg border border-border bg-surface-card p-4">
+                  <h3 className="flex items-center gap-2 text-sm font-bold text-foreground">
+                    <FileLock2 className="h-4 w-4" />
+                    Capturas de pantalla o archivos
+                  </h3>
+                  <p className="mt-1 text-xs text-neutral-600">
+                    Selecciona una o varias capturas de pantalla, imagenes o PDFs.
+                  </p>
+                  <input
+                    accept="image/*,application/pdf,.txt,.csv"
+                    className="hidden"
+                    id="evidence-file-input"
+                    multiple
+                    onChange={handleFileChange}
+                    type="file"
+                  />
                   <button
-                    className={cn(
-                      "min-h-20 rounded-md border p-4 text-left font-semibold hover:bg-secondary",
-                      sourceType === item.id
-                        ? "border-primary bg-secondary text-secondary-foreground"
-                        : "border-border bg-surface-card"
-                    )}
-                    key={item.id}
-                    onClick={() => handleSelectSource(item.id)}
+                    className="mt-3 flex w-full min-h-20 flex-col items-center justify-center rounded-md border border-dashed border-border-strong bg-neutral-50 p-4 text-center hover:bg-secondary"
+                    onClick={() => document.getElementById("evidence-file-input")?.click()}
                     type="button"
                   >
-                    <item.icon aria-hidden="true" className="mb-2 h-5 w-5 text-neutral-500" />
-                    {item.label}
+                    <FileLock2 className="h-6 w-6 text-neutral-500" />
+                    <span className="mt-2 text-sm font-semibold">Seleccionar archivos</span>
+                    <span className="text-xs text-neutral-600">Puedes seleccionar varios a la vez</span>
                   </button>
-                ))}
-              </div>
-            ) : null}
-            {step === 2 ? (
-              <div className="mt-4 space-y-4">
-                {sourceType === "imagen-local" ? (
-                  <div className="space-y-4">
-                    <input
-                      accept="image/*,application/pdf,.txt,.csv"
-                      className="hidden"
-                      id="evidence-file-input"
-                      onChange={handleFileChange}
-                      type="file"
-                    />
-                    {file ? (
-                      <div className="flex min-h-36 flex-col items-center justify-center rounded-md border border-success-100 bg-success-100 p-6 text-center">
-                        <Check className="h-8 w-8 text-success-700" />
-                        <p className="mt-3 text-sm font-semibold text-foreground truncate max-w-full">
-                          {file.name}
-                        </p>
-                        <p className="mt-1 text-xs text-neutral-600">
-                          {(file.size / 1024).toFixed(1)} KB · {file.type || "desconocido"}
-                        </p>
-                        <p className="mt-1 text-xs text-success-700">
-                          Archivo listo. No ha salido de este dispositivo.
-                        </p>
-                      </div>
-                    ) : (
-                      <button
-                        className="flex min-h-36 w-full flex-col items-center justify-center rounded-md border border-dashed border-border-strong bg-surface-card p-6 text-center hover:bg-secondary"
-                        onClick={() => document.getElementById("evidence-file-input")?.click()}
-                        type="button"
-                      >
-                        <FileLock2 aria-hidden="true" className="h-8 w-8 text-neutral-500" />
-                        <p className="mt-3 text-sm font-semibold text-foreground">
-                          Selecciona un archivo
-                        </p>
-                        <p className="mt-1 text-xs text-neutral-600">
-                          Imagen, captura de pantalla o PDF. Vista previa difuminada por privacidad.
-                        </p>
-                      </button>
-                    )}
-                  </div>
-                ) : (
-                  <Field
-                    helper={isAlertMode && initialData?.sourceUrl ? "Dato pre-llenado desde alerta institucional. Puedes modificarlo." : "No se realiza carga real. Este campo es para referencia."}
-                    id="evidence-url"
-                    label="URL o referencia"
-                  >
+                </div>
+
+                {/* URL input */}
+                <div className="rounded-lg border border-border bg-surface-card p-4">
+                  <h3 className="flex items-center gap-2 text-sm font-bold text-foreground">
+                    <Route className="h-4 w-4" />
+                    Enlaces
+                  </h3>
+                  <div className="mt-3 flex gap-2">
                     <Input
                       aria-describedby="evidence-url-helper"
                       className={cn(
-                        isAlertMode && initialData?.sourceUrl && "border-info-300 bg-info-50 focus-visible:ring-info-400"
+                        isAlertMode && initialData?.sourceUrl && "border-info-300 bg-info-50"
                       )}
                       id="evidence-url"
-                      onChange={(e) => setUrl(e.target.value)}
-                      placeholder="https://plataforma-demo.example/publicacion"
-                      value={url}
+                      onChange={(e) => { setUrlInput(e.target.value); setUrlError(""); }}
+                      onKeyDown={(e: KeyboardEvent<HTMLInputElement>) => { if (e.key === "Enter") handleAddUrl(); }}
+                      placeholder="https://x.com/usuario/status/123..."
+                      type="url"
+                      value={urlInput}
                     />
-                    {isAlertMode && initialData?.sourceUrl ? (
-                      <span className="mt-1 inline-flex items-center gap-1 text-xs text-info-700">
-                        <CheckCircle2 className="h-3 w-3" />
-                        Auto-completado por alerta institucional
-                      </span>
-                    ) : null}
-                  </Field>
-                )}
+                    <Button onClick={handleAddUrl} type="button" variant="secondary">
+                      Agregar
+                    </Button>
+                  </div>
+                  {urlError ? (
+                    <p className="mt-2 text-xs text-danger-700">{urlError}</p>
+                  ) : null}
+                  {isAlertMode && initialData?.sourceUrl ? (
+                    <span className="mt-2 inline-flex items-center gap-1 text-xs text-info-700">
+                      <CheckCircle2 className="h-3 w-3" />
+                      URL pre-llenada desde alerta institucional
+                    </span>
+                  ) : null}
+                </div>
+
+                {/* Note input */}
+                <div className="rounded-lg border border-border bg-surface-card p-4">
+                  <h3 className="flex items-center gap-2 text-sm font-bold text-foreground">
+                    <Paperclip className="h-4 w-4" />
+                    Notas contextuales
+                  </h3>
+                  <Textarea
+                    className="mt-3 min-h-[80px]"
+                    id="evidence-note"
+                    onChange={(e) => setNoteInput(e.target.value)}
+                    placeholder="Describe el contexto, fecha aproximada, o cualquier detalle relevante..."
+                    value={noteInput}
+                  />
+                  <Button className="mt-2" onClick={handleAddNote} type="button" variant="secondary">
+                    Agregar nota
+                  </Button>
+                </div>
+
+                {/* Evidence tray */}
+                <div className="rounded-lg border border-border bg-surface-card p-4">
+                  <h3 className="flex items-center justify-between text-sm font-bold text-foreground">
+                    <span>Bandeja de evidencias</span>
+                    <Badge variant="neutral">{evidenceItems.length}</Badge>
+                  </h3>
+                  {evidenceItems.length === 0 ? (
+                    <div className="mt-4 flex flex-col items-center justify-center py-8 text-center">
+                      <FileLock2 className="h-10 w-10 text-neutral-300" />
+                      <p className="mt-3 text-sm text-neutral-600">
+                        Aun no has agregado evidencias.
+                      </p>
+                      <p className="text-xs text-neutral-500">
+                        Selecciona al menos un archivo, enlace o nota para continuar.
+                      </p>
+                    </div>
+                  ) : (
+                    <ul className="mt-3 space-y-2">
+                      {evidenceItems.map((item) => {
+                        const Icon = getEvidenceIcon(item.type);
+                        return (
+                          <li
+                            className="flex items-center gap-3 rounded-md border border-border bg-neutral-50 p-3"
+                            key={item.id}
+                          >
+                            <Icon className="h-5 w-5 shrink-0 text-neutral-500" />
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate text-sm font-medium text-foreground">
+                                {item.label}
+                              </p>
+                              <div className="flex items-center gap-2 text-xs text-neutral-600">
+                                <Badge variant="neutral">
+                                  {item.type === "screenshot" ? "Archivo" : item.type === "url" ? "Enlace" : "Nota"}
+                                </Badge>
+                                {item.size ? (
+                                  <span>{formatItemSize(item.size)}</span>
+                                ) : null}
+                              </div>
+                            </div>
+                            <button
+                              aria-label={`Eliminar ${item.label}`}
+                              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-neutral-400 hover:bg-danger-100 hover:text-danger-700"
+                              onClick={() => handleRemoveItem(item.id)}
+                              type="button"
+                            >
+                              <X className="h-4 w-4" />
+                            </button>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
+                </div>
               </div>
             ) : null}
-            {step === 3 ? (
+            {step === 2 ? (
               <div className="mt-4 space-y-4">
                 <Field
                   helper="Este contexto se puede editar antes de enviar."
@@ -1093,24 +1232,24 @@ export function EvidenceCaptureStepper({ initialData }: EvidenceCaptureStepperPr
                       QR demo
                     </div>
                   </>
-                ) : !file ? (
+                ) : !primaryFile ? (
                   <div className="flex flex-col items-center gap-3 py-6 text-center">
                     <FileLock2 aria-hidden="true" className="h-8 w-8 text-neutral-400" />
                     <p className="text-sm text-neutral-600">
-                      No hay archivo seleccionado. Regresa al paso de Fuente para seleccionar uno.
+                      No hay archivo seleccionado. Regresa al paso anterior para agregar al menos una captura de pantalla.
                     </p>
                     <Button onClick={() => setStep(1)} type="button" variant="secondary">
-                      Ir a seleccionar
+                      Ir a agregar evidencias
                     </Button>
                   </div>
                 ) : (
                   <div className="flex flex-col items-center gap-3 py-6 text-center">
                     <Shield className="h-8 w-8 text-primary" />
                     <p className="text-sm font-semibold text-foreground">
-                      Archivo listo para sellar
+                      Archivo principal listo para sellar
                     </p>
                     <p className="text-xs text-neutral-600">
-                      Al sellar, se genera un hash SHA-256 unico para este archivo. El archivo no sale del dispositivo.
+                      Se sellara el archivo principal. Los demas elementos se incluyen en el reporte como evidencia de soporte.
                     </p>
                     <Button onClick={handleSeal} type="button">
                       <ShieldCheck aria-hidden="true" className="mr-2 h-4 w-4" />
@@ -1125,7 +1264,7 @@ export function EvidenceCaptureStepper({ initialData }: EvidenceCaptureStepperPr
                 ) : null}
               </div>
             ) : null}
-            {step === 5 ? (
+            {step === 4 ? (
               <div className="mt-4 space-y-4">
                 {sealResult ? (
                   <>
@@ -1146,6 +1285,35 @@ export function EvidenceCaptureStepper({ initialData }: EvidenceCaptureStepperPr
                         <span>{(sealResult.metadata.sizeBytes / 1024).toFixed(1)} KB</span>
                       </div>
                     </div>
+
+                    {/* All evidence items */}
+                    {evidenceItems.length > 1 && (
+                      <div className="rounded-lg border border-border bg-surface-card p-4">
+                        <h3 className="mb-3 text-sm font-bold text-foreground">
+                          Evidencias de soporte ({evidenceItems.length - 1})
+                        </h3>
+                        <ul className="space-y-2">
+                          {evidenceItems.map((item) => {
+                            if (item.content instanceof File && item.content.name === sealResult.metadata.originalFilename) {
+                              return null; // Skip primary file (already shown above)
+                            }
+                            const Icon = getEvidenceIcon(item.type);
+                            return (
+                              <li className="flex items-center gap-3 rounded-md border border-border bg-neutral-50 p-3" key={item.id}>
+                                <Icon className="h-4 w-4 shrink-0 text-neutral-500" />
+                                <div className="min-w-0 flex-1">
+                                  <p className="truncate text-sm text-foreground">{item.label}</p>
+                                  <Badge variant="neutral">
+                                    {item.type === "screenshot" ? "Archivo" : item.type === "url" ? "Enlace" : "Nota"}
+                                  </Badge>
+                                </div>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      </div>
+                    )}
+
                     <CustodyTimeline events={realCustodyEvents} />
                   </>
                 ) : (
@@ -1155,7 +1323,7 @@ export function EvidenceCaptureStepper({ initialData }: EvidenceCaptureStepperPr
                 )}
               </div>
             ) : null}
-            {step === 6 ? (
+            {step === 5 ? (
               <div className="mt-4 space-y-4">
                 {saved ? (
                   <div className="rounded-md border border-success-100 bg-success-100 p-4 text-sm leading-6 text-success-700">
@@ -1208,7 +1376,7 @@ export function EvidenceCaptureStepper({ initialData }: EvidenceCaptureStepperPr
             <Button type="button" variant="secondary">
               Guardar y continuar despues
             </Button>
-            {step < 4 ? (
+            {step < 3 ? (
               <Button
                 disabled={!canAdvance()}
                 onClick={handleNext}
@@ -1216,7 +1384,7 @@ export function EvidenceCaptureStepper({ initialData }: EvidenceCaptureStepperPr
               >
                 Continuar
               </Button>
-            ) : step === 4 ? (
+            ) : step === 3 ? (
               <Button
                 disabled={!sealResult}
                 onClick={handleNext}
@@ -1224,9 +1392,9 @@ export function EvidenceCaptureStepper({ initialData }: EvidenceCaptureStepperPr
               >
                 Revisar antes de enviar
               </Button>
-            ) : step < 6 ? (
+            ) : step === 4 ? (
               <Button onClick={handleNext} type="button">
-                {step === 5 ? "Guardar o continuar" : "Continuar"}
+                Guardar o continuar
               </Button>
             ) : null}
           </div>
@@ -1247,9 +1415,13 @@ export function EvidenceCaptureStepper({ initialData }: EvidenceCaptureStepperPr
               {sealResult ? (
                 <>
                   <div className="flex justify-between gap-3 border-b border-border pb-2">
-                    <dt className="font-semibold text-neutral-600">Archivo</dt>
+                    <dt className="font-semibold text-neutral-600">
+                      {evidenceItems.length > 1 ? "Evidencias" : "Archivo"}
+                    </dt>
                     <dd className="text-right text-foreground truncate max-w-[180px]">
-                      {sealResult.metadata.originalFilename}
+                      {evidenceItems.length > 1
+                        ? `${evidenceItems.length} elementos`
+                        : sealResult.metadata.originalFilename}
                     </dd>
                   </div>
                   <div className="flex justify-between gap-3 border-b border-border pb-2">
@@ -1288,8 +1460,10 @@ export function EvidenceCaptureStepper({ initialData }: EvidenceCaptureStepperPr
               ) : (
                 <>
                   <div className="flex justify-between gap-3 border-b border-border pb-2">
-                    <dt className="font-semibold text-neutral-600">Fecha de captura</dt>
-                    <dd className="text-right text-foreground">Pendiente</dd>
+                    <dt className="font-semibold text-neutral-600">Evidencias</dt>
+                    <dd className="text-right text-foreground">
+                      {evidenceItems.length > 0 ? `${evidenceItems.length} elementos` : "Pendiente"}
+                    </dd>
                   </div>
                   <div className="flex justify-between gap-3 border-b border-border pb-2">
                     <dt className="font-semibold text-neutral-600">Plataforma</dt>
@@ -1301,8 +1475,10 @@ export function EvidenceCaptureStepper({ initialData }: EvidenceCaptureStepperPr
                     </dd>
                   </div>
                   <div className="flex justify-between gap-3 border-b border-border pb-2">
-                    <dt className="font-semibold text-neutral-600">Archivo</dt>
-                    <dd className="text-right text-foreground">Pendiente</dd>
+                    <dt className="font-semibold text-neutral-600">Archivo principal</dt>
+                    <dd className="text-right text-foreground">
+                      {primaryFile ? primaryFile.name : "Pendiente"}
+                    </dd>
                   </div>
                   <div className="flex justify-between gap-3 border-b border-border pb-2">
                     <dt className="font-semibold text-neutral-600">Estado local</dt>
