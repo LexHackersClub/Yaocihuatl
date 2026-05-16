@@ -76,32 +76,25 @@ OPENROUTER_APP_TITLE=Yaocihuatl Chimalli
 
 No enviar datos sensibles a un proveedor LLM externo sin documentacion institucional, base legal, minimizacion y autorizacion.
 
-Si se habilita Tlachia con Reddit (MVP):
+Tlachia MVP opera con fixtures sinteticos, sin API keys reales:
 
 ```bash
-REDDIT_CLIENT_ID=...
-REDDIT_CLIENT_SECRET=...
-REDDIT_USERNAME=...
-REDDIT_PASSWORD=...
-REDDIT_USER_AGENT=python:yaocihuatl-tlachia:v0.1.0 (by /u/institutional_account)
-REDDIT_REQUEST_TIMEOUT_SECONDS=20
-REDDIT_MAX_REQUESTS_PER_RUN=50
-REDDIT_DEFAULT_LOOKBACK_HOURS=24
-
 TLACHIA_INGESTION_ENABLED=false
 TLACHIA_DEMO_MODE=true
-TLACHIA_STORE_RAW_REDDIT_CONTENT=false
+TLACHIA_SYNTHETIC_MODE=true
+TLACHIA_SYNTHETIC_FIXTURES_PATH=datasets/synthetic/tlachia
+TLACHIA_SYNTHETIC_PLATFORMS=facebook,instagram,x,tiktok,reddit
+TLACHIA_STORE_RAW_PLATFORM_CONTENT=false
 TLACHIA_RETENTION_HOURS=48
 TLACHIA_MIN_ALERT_SCORE=50
 ```
 
-Notas Reddit:
+Notas Tlachia:
 
-- `REDDIT_USER_AGENT` debe ser unico, descriptivo y verdadero.
-- `TLACHIA_STORE_RAW_REDDIT_CONTENT=false` es el default; solo se guardan extractos sanitizados y metadatos minimos.
-- `TLACHIA_RETENTION_HOURS=48` minimiza retencion de contenido de Reddit segun recomendacion operativa.
-- Respetar headers de rate limit: `X-Ratelimit-Used`, `X-Ratelimit-Remaining`, `X-Ratelimit-Reset`.
-- Si contenido o cuentas se eliminan en Reddit, debe eliminarse el contenido relacionado localmente.
+- No configurar credenciales reales de Reddit, YouTube, Meta, X, TikTok ni otras plataformas para Tlachia en el MVP.
+- `TLACHIA_SYNTHETIC_MODE=true` es obligatorio para el demo.
+- `TLACHIA_STORE_RAW_PLATFORM_CONTENT=false` es el default; solo se guardan extractos sanitizados y metadatos minimos en persistencia.
+- Los fixtures sinteticos viven en `datasets/synthetic/tlachia`.
 
 ## Comandos Operativos
 
@@ -170,18 +163,17 @@ Pendiente de formalizar antes de produccion con datos reales:
 
 ## Ejecucion Programada Controlada (Opcion MVP)
 
-Para ejecutar ingesta periodica sin Celery, usar cron del servidor con restricciones:
+Para ejecutar ingesta periodica desde fixtures sinteticos sin Celery, usar cron del servidor con restricciones:
 
 ```bash
 # Ejecutar cada hora solo si TLACHIA_INGESTION_ENABLED=true
-0 * * * * cd /opt/yaocihuatl/backend && python -m app.services.tlachia.run_reddit_ingestion --source-id <UUID> >> /var/log/yaocihuatl-ingestion.log 2>&1
+0 * * * * cd /opt/yaocihuatl/backend && python -m app.services.tlachia.run_synthetic_ingestion --scenario campaign-burst-demo >> /var/log/yaocihuatl-ingestion.log 2>&1
 ```
 
 Reglas:
 
 - Configurar `TLACHIA_INGESTION_ENABLED=true` explicitamente antes de habilitar cron.
-- Monitorear `/var/log/yaocihuatl-ingestion.log` para detectar rate limits o errores.
-- Nunca ejecutar mas frecuente que el intervalo de rate limit de Reddit (100 queries/minuto promediado).
+- Monitorear `/var/log/yaocihuatl-ingestion.log` para detectar errores de fixtures o ejecucion.
 - Usar un usuario de sistema sin privilegios para ejecutar el comando.
 - Rotar logs para evitar llenado de disco.
 

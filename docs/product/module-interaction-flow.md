@@ -54,7 +54,8 @@ El sistema utiliza un único backend centralizado (FastAPI + PostgreSQL + pgvect
 ### Tlachia (Motor de Monitoreo y Dashboard OPLE)
 
 * **Lo que SÍ hace:**
-  * Ingiere de forma continua menciones públicas dirigidas a las cuentas autorizadas utilizando adaptadores intercambiables (APIs de Reddit, YouTube y mocks institucionales de X/Facebook).
+  * En el MVP ingiere menciones sinteticas desde fixtures que emulan respuestas API de Facebook, Instagram, X, TikTok y Reddit. No usa API keys reales ni llamadas externas.
+  * Mantiene una interfaz de adaptadores intercambiables para que, en una fase futura y con aprobacion institucional, puedan conectarse APIs reales sin reescribir el flujo de alertas.
   * Aplica un modelo NLP supervisado (BETO/DeepSeek) para clasificar texto bajo las 19 conductas del Art. 20 Ter de la LGAMVLV. **Objetivo futuro; el MVP usa reglas explicables iniciales sin clasificación legal definitiva.**
   * Ejecuta algoritmos de clustering temporal y semántico (DBSCAN + NetworkX) para detectar ráfagas de acoso o campañas coordinadas (*astroturfing*). **Objetivo futuro; fuera del MVP actual.**
   * Presenta un panel con semáforos de riesgo explicables para la analista humana.
@@ -62,6 +63,7 @@ El sistema utiliza un único backend centralizado (FastAPI + PostgreSQL + pgvect
 * **Lo que NO hace:**
   * No confirma de manera autónoma si un caso constituye Violencia Política contra las Mujeres en Razón de Género (VPMRG); la tipificación final requiere obligatoriamente validación humana.
   * No realiza scraping invasivo sobre cuentas privadas ni accede a comunicaciones cifradas (WhatsApp/Telegram fuera de alcance por cifrado E2E).
+  * No usa credenciales reales de plataformas en el MVP.
 
 ### Machiyotl (Kit de Certificación Forense en PWA)
 
@@ -105,7 +107,7 @@ El sistema utiliza un único backend centralizado (FastAPI + PostgreSQL + pgvect
 | **Machiyotl** | Pérdida total de conectividad a Internet (3G/4G/Wi-Fi) durante un evento político o mitin en campo. | El Service Worker de la PWA intercepta la falla de red. Machiyotl ejecuta localmente el hashing SHA-256 a través del navegador, cifra el archivo multimedia con AES-GCM y lo almacena en IndexedDB. Encola una tarea asíncrona de sincronización en segundo plano (*Background Sync API*) para transmitir los metadatos al volver a tener señal. |
 | **Machiyotl** | Riesgo de confrontación física o supervisión coercitiva del agresor sobre el dispositivo de la víctima. | La usuaria presiona el "Botón de Pánico" situado de forma persistente en la interfaz. La PWA realiza inmediatamente una redirección dura (`window.location.replace`) hacia un motor de búsqueda genérico, destruye el estado de sesión en memoria (`SessionStorage.clear()`) y oculta el árbol de componentes del UI de captura sin alterar las evidencias ya hasheadas e indexadas localmente. |
 | **Chimalli** | La usuaria ingresa una narrativa o evidencia completamente ajena a la materia electoral (Ej. Robo común o extorsión inmobiliaria). | El módulo de extracción estructurada del LLM evalúa la intención del prompt. Al fallar el Elemento 1 del Test (Vínculo político-electoral), el RAG bloquea la generación del expediente del PES. El chat activa un flujo de *fallback* explícito, entregando las direcciones de las fiscalías estatales del fuero común y teléfonos de emergencia, dejando constancia para evitar la revictimización. |
-| **Chimalli** | La usuaria sube capturas de pantalla de ataques directamente en el chat conversacional sin proporcionar texto descriptivo. | Chimalli activa sus capacidades de visión multimodal sobre el archivo cargado. Extrae el texto de la imagen mediante el modelo, detecta los patrones de agresión o sesgos de género e inicia proactivamente el interrogatorio guiado: *"Detecto texto con posibles descalificaciones en la captura de pantalla de YouTube que subiste. Para armar tu expediente, ¿podrías confirmarme si esta cuenta ha coordinado ataques previos?"*. |
+| **Chimalli** | La usuaria sube capturas de pantalla de ataques directamente en el chat conversacional sin proporcionar texto descriptivo. | Chimalli activa sus capacidades de visión multimodal sobre el archivo cargado. Extrae el texto de la imagen mediante el modelo, detecta los patrones de agresión o sesgos de género e inicia proactivamente el interrogatorio guiado: *"Detecto texto con posibles descalificaciones en la captura de pantalla que subiste. Para armar tu expediente, ¿podrías confirmarme si esta cuenta ha coordinado ataques previos?"*. |
 
 ---
 
@@ -158,7 +160,7 @@ La interacción dentro del ecosistema se divide cronológicamente de acuerdo a s
 
 * La pantalla adopta una estética informativa de asistencia rápida.
 * Texto principal: "Tu evidencia ya está certificada criptográficamente y no podrá desaparecer. Antes de formular la queja legal, detengamos la propagación del daño.".
-* Presenta una lista de tarjetas por plataforma de red social (Meta, X, YouTube) con botones de redirección profunda (*deep links*). El sistema copia automáticamente al portapapeles de la usuaria el texto de denuncia estándar y los enlaces de los agresores metadateados en el paso previo.
+* Presenta una lista de tarjetas por plataforma de red social (Meta, X, TikTok, Instagram u otras rutas aplicables) con botones de redirección profunda (*deep links*). El sistema copia automáticamente al portapapeles de la usuaria el texto de denuncia estándar y los enlaces de los agresores metadateados en el paso previo.
 * Botón inferior de salida: `[ Confirmar reportes y redactar expediente ]`.
 
 #### Pantalla 5: Módulo Chimalli - Chat Conversacional de Inteligencia Artificial
@@ -251,7 +253,7 @@ Payload cargado en el estado de Zustand dentro de la PWA de la víctima para que
     "4a8e3b2c1d9f8e7a6b5c4d3e2f1a0b9c8d7e6f5a4b3c2d1e0f9a8b7c6d5e4f3a"
   ],
   "declared_sources": {
-    "platform": "YouTube",
+    "platform": "TikTok",
     "evidence_type": "SCREENSHOT_AND_URL",
     "has_offline_records": false
   },
@@ -296,7 +298,7 @@ Payload final estructurado por el agente de DeepSeek-V3 tras completar la intera
 
 ## Conclusiones de Uso para el Repositorio
 
-> **Nota sobre alcance MVP actual:** Los contratos JSON presentados en este documento representan la especificación objetivo a largo plazo del ecosistema. En el MVP actual se implementan solo las capacidades base: login institucional con roles reales, ingesta controlada desde Reddit mediante API oficial, alertas asistivas con reglas explicables (no clasificación legal definitiva), y revisión humana. Capacidades señaladas como "objetivo futuro" (OIDC, Firma Electrónica, BETO/DeepSeek clasificador definitivo, DBSCAN/NetworkX, envío a Oficialía de Partes) quedan fuera del MVP y deben documentarse como fase 2.
+> **Nota sobre alcance MVP actual:** Los contratos JSON presentados en este documento representan la especificación objetivo a largo plazo del ecosistema. En el MVP actual se implementan solo las capacidades base: login institucional con roles reales, ingesta controlada desde fixtures sinteticos multiplataforma, alertas asistivas con reglas explicables (no clasificación legal definitiva), y revisión humana. No se usan API keys reales ni llamadas externas a plataformas. Capacidades señaladas como "objetivo futuro" (OIDC, Firma Electrónica, APIs reales de plataformas, BETO/DeepSeek clasificador definitivo, DBSCAN/NetworkX, envío a Oficialía de Partes) quedan fuera del MVP y deben documentarse como fase 2.
 >
 > **Vocabulario de riesgo:** El sistema usa exclusivamente `low`, `medium`, `high`, `unclassified` para niveles de riesgo asistivo. Nunca se emite `confirmed` como resultado de una regla o modelo automático.
 

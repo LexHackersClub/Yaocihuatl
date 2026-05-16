@@ -51,9 +51,9 @@ Alertas, senales explicables y observacion asistiva.
 
 | Tabla | Uso |
 |---|---|
-| `sources` | Fuentes configuradas por analistas/admins (ej. subreddit Reddit). |
+| `sources` | Fuentes sinteticas configuradas por analistas/admins (plataforma, escenario y fixture). |
 | `ingestion_runs` | Bitacora tecnica de cada corrida de ingesta. |
-| `reddit_items` | Registro minimo para deduplicacion y cumplimiento. No guarda contenido crudo completo. |
+| `platform_items` | Registro minimo para deduplicacion de menciones sinteticas multiplataforma. No guarda contenido crudo completo en persistencia. |
 | `alerts` | Alerta revisable, riesgo asistivo, plataforma y motivo. |
 | `alert_signals` | Senales que explican por que existe la alerta. |
 | `sanitized_mentions` | Fragmentos sanitizados/autorizados, no comunicaciones privadas. |
@@ -66,7 +66,8 @@ Reglas:
 - No usar `confirmed` para resultados de IA.
 - No guardar contenido privado.
 - No inferir identidad de agresores sin fuente autorizada.
-- `reddit_items` solo guarda extractos sanitizados y metadatos permitidos (score, numero de comentarios, flag over_18, flair, hash de similitud). Prohibido: perfil completo del autor, karma, historial, mensajes privados, datos de localizacion.
+- `platform_items` solo guarda extractos sanitizados y metadatos permitidos de fixtures sinteticos. Prohibido introducir perfiles reales, historiales, mensajes privados, datos de localizacion o inferencias de identidad.
+- El MVP no usa API keys reales ni llamadas externas a Facebook, Instagram, X, TikTok, Reddit u otras plataformas.
 
 ### `machiyotl`
 

@@ -362,7 +362,7 @@ Endpoints:
 - `PATCH /tlachia/sources/{id}` — actualizar fuente (admin).
 - `POST /tlachia/sources/{id}/pause` — pausar fuente (admin).
 - `POST /tlachia/sources/{id}/resume` — reactivar fuente (admin).
-- `POST /tlachia/ingest/reddit` — ejecutar ingesta controlada (admin, electoral_analyst).
+- `POST /tlachia/ingest/synthetic` — ejecutar ingesta controlada desde fixtures sinteticos (admin, electoral_analyst).
 - `GET /tlachia/ingestion-runs` — listar corridas (admin, electoral_analyst).
 - `GET /tlachia/ingestion-runs/{id}` — consultar corrida (admin, electoral_analyst).
 - `GET /tlachia/alerts` — listar alertas (admin, electoral_analyst).
@@ -381,6 +381,8 @@ Restricciones:
 - `risk_level` usa `low`, `medium`, `high`, `unclassified`;
 - nunca `confirmed` para resultados automaticos;
 - auditoria obligatoria en revision, descarte y escalamiento.
+- no API keys reales ni llamadas externas a plataformas en el MVP.
+- plataformas simuladas: `facebook`, `instagram`, `x`, `tiktok`, `reddit`.
 
 ## Core / Observatory / Audit
 
