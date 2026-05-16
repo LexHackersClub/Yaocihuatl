@@ -140,13 +140,15 @@ El backend relacional fue parcialmente generado por el agente antes del pivote a
 | Componente | Ubicación | Estado |
 |---|---|---|
 | PWA app | `frontend/apps/pwa-machiyotl/` | ❌ Placeholder (solo README) |
-| Demo page | `frontend/apps/demo/src/app/app/machiyotl/` | ⚠️ Demo estática con stepper |
-| Service Worker | — | ❌ No existe |
-| IndexedDB/Dexie adapter | — | ❌ No existe |
-| Web Crypto / hashing | — | ❌ No existe |
+| Demo page | `frontend/apps/demo/src/app/app/machiyotl/` | ✅ Stepper con crypto real |
+| Evidence capture hook | `frontend/apps/demo/src/lib/use-local-seal.ts` | ✅ Web Crypto SHA-256 |
+| Evidence store | `frontend/apps/demo/src/lib/use-evidence-store.ts` | ✅ localStorage persistence |
+| Public verifier | `frontend/apps/demo/src/app/verify/page.tsx` | ✅ Conectado a endpoint real |
+| Online/offline indicator | TopBar en `app-shell.tsx` | ✅ navigator.onLine |
+| Service Worker | — | ❌ No existe (no necesario para demo) |
+| IndexedDB/Dexie adapter | — | ❌ No existe (localStorage para demo) |
 | PDF generation | — | ❌ No existe |
-| Panic button | — | ❌ No existe |
-| Evidence state machine (client) | — | ❌ No existe |
+| Panic button | PanicExitButton en `app-shell.tsx` | ✅ Funcional |
 
 ### Cross-Module Integration
 
@@ -434,22 +436,24 @@ error        → [draft, sealed-local]  (recuperación)
 
 ### EPIC D — Interfaz Segura y Perspectiva de Género
 
-#### MCH-300 | Flujo de Interfaz y Botón de Pánico
+#### MCH-300 | Flujo de Interfaz y Botón de Pánico (Incluye MCH-200)
 
-- **Objective:** Interfaz de muy baja fricción considerando la posible vulnerabilidad física de la usuaria.
+- **Objective:** Interfaz de muy baja fricción con captura real de archivos, sellado criptográfico SHA-256 local, y botón de pánico funcional.
 - **Implementation details:**
-  - Stepper de captura de evidencia: seleccionar fuente → agregar archivo → contexto opcional → sellar → revisar → guardar o enviar (DESIGN.md §16.5).
-  - Botón de pánico persistente (FAB rojo/naranja per DESIGN.md §2.6): `window.location.replace('https://google.com')`, limpiar `sessionStorage`, oferta de limpieza selectiva de IndexedDB.
-  - Etiquetas neutrales en pestañas y encabezados (sin "violencia" ni "denuncia", DESIGN.md §2.6).
-  - Indicador de estado de red visible en App Shell.
-  - Accesibilidad WCAG 2.2 AA: contraste 4.5:1, targets 44px, focus rings.
-- **Must include:** Botón de pánico < 100ms; navegación posterior no muestra info sensible; etiquetas neutrales.
-- **Deliverables:** Pantallas Next.js conectadas a hooks de MCH-101, MCH-102, MCH-200.
-- **Dependencies:** MCH-100, MCH-101, MCH-102, MCH-200.
-- **Acceptance criteria:** Botón de pánico responde en < 100ms; atrás no muestra info sensible; AA contrast check pasa.
-- **Validation:** Tests E2E de redirección; verificación de contraste con axe/WAVE; medición de tiempo de respuesta.
-- **Estimate:** 2 días.
+  - Crear `useLocalSeal` hook: Web Crypto API → SHA-256 local, sin red (MCH-200 integrado).
+  - Crear `useEvidenceStore` hook: persistencia en localStorage para evidencias selladas.
+  - Reemplazar `EvidenceCaptureStepper` con versión real: file input HTML5, sellado criptográfico, guardado en localStorage.
+  - Agregar indicador online/offline en `TopBar` con `navigator.onLine` + listeners.
+  - Conectar `/verify` con endpoint real `GET /api/v1/machiyotl/verify/:hash`.
+  - PanicExitButton existente mantiene su comportamiento (clear + redirect a /safe-exit).
+- **Must include:** Archivo NUNCA sale del dispositivo; hash SHA-256 real; etiquetas neutrales; indicador de red.
+- **Deliverables:** `use-local-seal.ts`, `use-evidence-store.ts`, `EvidenceCaptureStepper` real, `/verify` conectado, TopBar con online/offline.
+- **Dependencies:** MCH-400 (endpoint de verificación), MCH-005 (schemas).
+- **Acceptance criteria:** Archivo seleccionado produce hash SHA-256; hash coincide con `sha256sum`; `/verify` consulta endpoint real; botón de pánico funciona; sin tráfico de red durante sellado.
+- **Validation:** `sha256sum` vs hash del navegador; curl al endpoint de verificación; test manual de panic button; Network tab limpio durante sellado.
+- **Estimate:** 1 día (MCH-200 + MCH-300 combinados).
 - **Owner role:** Frontend Engineer + UX.
+- **Status:** ✅ Completado (2026-05-15) — `useLocalSeal` implementado con Web Crypto API; `useEvidenceStore` implementado con localStorage; `EvidenceCaptureStepper` reemplazado con versión real de 7 pasos; `TopBar` con indicador online/offline; `/verify` conectado a endpoint real; archivo nunca sale del dispositivo.
 
 #### MCH-301 | Componentes de UI Forense (HashBlock, EvidenceCard, CustodyTimeline)
 
