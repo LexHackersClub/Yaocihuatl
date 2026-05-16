@@ -200,6 +200,8 @@ class TlachiaAlert(Base):
     created_by_id: Mapped[UUID | None] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("iam.users.id"))
     created_at: Mapped[datetime] = utc_created_at()
 
+    alert_signals: Mapped[list[TlachiaAlertSignal]] = relationship("TlachiaAlertSignal", lazy="select")
+
 
 class TlachiaAlertSignal(Base):
     __tablename__ = "alert_signals"

@@ -87,7 +87,7 @@ def test_analyst_can_review_alert() -> None:
         db.add(source)
         alert = TlachiaAlert(
             id=uuid4(),
-            alert_code="TLA-DEMO01",
+            alert_code=f"TLA-{uuid4().hex[:8].upper()}",
             protected_person_label="demo",
             platform="x",
             risk_level="medium",

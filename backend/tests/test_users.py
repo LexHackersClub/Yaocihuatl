@@ -1,3 +1,5 @@
+from uuid import uuid4
+
 from fastapi.testclient import TestClient
 
 from app.db.session import create_session
@@ -10,6 +12,8 @@ ADMIN_USERNAME = "admin"
 ADMIN_PASSWORD = "admin123"
 ANALYST_USERNAME = "analista"
 ANALYST_PASSWORD = "electoral"
+
+_RUN_ID = uuid4().hex[:8]
 
 
 def setup_module() -> None:
@@ -30,11 +34,12 @@ def _login(client: TestClient, username: str, password: str) -> str:
 def test_admin_can_create_user() -> None:
     client = TestClient(app)
     token = _login(client, ADMIN_USERNAME, ADMIN_PASSWORD)
+    username = f"nueva_analista_{_RUN_ID}"
     response = client.post(
         "/api/v1/users",
         headers={"Authorization": f"Bearer {token}"},
         json={
-            "username": "nueva_analista",
+            "username": username,
             "display_name": "Nueva Analista",
             "password": "segura1234",
             "role_codes": ["electoral_analyst"],
@@ -42,7 +47,7 @@ def test_admin_can_create_user() -> None:
     )
     assert response.status_code == 201
     payload = response.json()
-    assert payload["username"] == "nueva_analista"
+    assert payload["username"] == username
     assert any(role["code"] == "electoral_analyst" for role in payload["roles"])
 
 
@@ -70,7 +75,7 @@ def test_disabled_user_cannot_login() -> None:
         "/api/v1/users",
         headers={"Authorization": f"Bearer {admin_token}"},
         json={
-            "username": "temporal",
+            "username": f"temporal_{_RUN_ID}",
             "display_name": "Temporal",
             "password": "segura1234",
             "role_codes": ["electoral_analyst"],
@@ -100,7 +105,7 @@ def test_role_change_is_audited() -> None:
         "/api/v1/users",
         headers={"Authorization": f"Bearer {admin_token}"},
         json={
-            "username": "roltest",
+            "username": f"roltest_{_RUN_ID}",
             "display_name": "Rol Test",
             "password": "segura1234",
             "role_codes": ["civic_observer"],
