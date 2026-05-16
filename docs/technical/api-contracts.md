@@ -65,6 +65,24 @@ Requiere `Authorization: Bearer <token>`.
 
 Devuelve el usuario actual y sus roles.
 
+## Users
+
+Base path: `/api/v1/users`
+
+Estado: implementado MVP. Requiere rol `admin`.
+
+Endpoints:
+
+- `GET /users` — listar usuarios.
+- `POST /users` — crear usuario.
+- `GET /users/{id}` — consultar usuario.
+- `PATCH /users/{id}` — actualizar usuario.
+- `POST /users/{id}/disable` — desactivar usuario.
+- `POST /users/{id}/roles` — asignar roles.
+- `DELETE /users/{id}/roles/{role_code}` — remover rol.
+
+Auditoria: cada accion escribe en `audit.audit_log`.
+
 ## Chimalli
 
 Base path: `/api/v1/chimalli`
