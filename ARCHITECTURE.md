@@ -4,6 +4,8 @@ Yaocihuatl es un monorepo full-stack institucional desplegado actualmente en `ya
 
 El objetivo arquitectonico no es construir una herramienta de moderacion o vigilancia, sino una plataforma auditable para deteccion asistiva, preservacion de evidencia y canalizacion con revision humana.
 
+Para el flujo producto-tecnico entre interfaces y modulos, ver `docs/product/module-interaction-flow.md`.
+
 ## Estado Actual
 
 | Capa | Implementado | Pendiente |

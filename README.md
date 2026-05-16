@@ -164,6 +164,7 @@ Variables criticas:
 ## Documentacion Clave
 
 - `ARCHITECTURE.md`: arquitectura real y objetivo incremental.
+- `docs/product/module-interaction-flow.md`: flujo e interaccion entre Tlachia, Machiyotl, Chimalli y portal publico.
 - `docs/technical/data-model.md`: modelo de datos por esquema.
 - `docs/technical/api-contracts.md`: endpoints actuales y contratos pendientes.
 - `docs/technical/deployment.md`: despliegue Docker/AWS.
