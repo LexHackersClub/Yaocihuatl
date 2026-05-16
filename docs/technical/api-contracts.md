@@ -45,12 +45,17 @@ Auditoria:
 - login exitoso registra sesion;
 - login fallido registra evento `auth.login` con `outcome=failure`.
 
+Implementado:
+
+- `POST /auth/logout` revoca sesion y audita.
+- `POST /auth/change-password` exige contrasena actual y token valido.
+
 Pendiente:
 
-- politicas institucionales de contrasena;
+- politicas institucionales de contrasena (longitud, complejidad, historial);
 - recuperacion/rotacion;
 - RBAC por recurso;
-- posible SSO o proveedor institucional.
+- SSO o proveedor institucional (objetivo futuro fase 2).
 
 ### `GET /auth/me`
 
